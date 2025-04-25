@@ -134,7 +134,7 @@ The table below shows the comparison between FastnnUNet and the original nnUNet 
 | Module | Status | Expected Release |
 |--------|--------|-----------------|
 | 🔮 Knowledge Distillation | ✅ Released | Available Now |
-| 🚀 Fast Inference | ⏳ Planned | Coming Soon |
+| 🚀 Fast Inference | 🔜 Planned | Coming Soon |
 | ⚙️ C++ Engine | 🔜 Planned | Coming Soon |
 
 ## 📝 Citation
