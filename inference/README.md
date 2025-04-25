@@ -1,40 +1,40 @@
-# FastnnUNet Fast Inference Module
+# 🚀 FastnnUNet Fast Inference Module
 
 The FastnnUNet Inference Module is a component for high-performance medical image segmentation based on knowledge distillation-trained lightweight models. This module maintains accuracy and preprocessing/postprocessing workflows identical to the original nnUNet, but with inference speed improved by tens of times.
 
-## Features
+## ✨ Features
 
-- **High-speed Inference**: Based on distilled lightweight models, performance improves by tens of times compared to the original nnUNet
-- **Consistent Accuracy**: Segmentation accuracy comparable to the original nnUNet, without sacrificing accuracy
-- **GPU Memory Friendly**: Significantly reduces GPU memory requirements, supports running on mid to low-end graphics cards
-- **ONNX Optimization**: Utilizes ONNX Runtime optimization for further performance improvements
-- **Multiple Anatomical Regions**: Supports segmentation of multiple anatomical regions including skeletal, thoracic, abdominal, head and neck, pelvic, spine, limbs, and whole body
-- **Advanced Postprocessing**: Specialized postprocessing algorithms for different anatomical structures to improve segmentation quality
+- ⚡ **High-speed Inference**: Based on distilled lightweight models, performance improves by tens of times compared to the original nnUNet
+- 🎯 **Consistent Accuracy**: Segmentation accuracy comparable to the original nnUNet, without sacrificing accuracy
+- 💾 **GPU Memory Friendly**: Significantly reduces GPU memory requirements, supports running on mid to low-end graphics cards
+- 🔄 **ONNX Optimization**: Utilizes ONNX Runtime optimization for further performance improvements
+- 🏥 **Multiple Anatomical Regions**: Supports segmentation of multiple anatomical regions including skeletal, thoracic, abdominal, head and neck, pelvic, spine, limbs, and whole body
+- 🧮 **Advanced Postprocessing**: Specialized postprocessing algorithms for different anatomical structures to improve segmentation quality
 
-## Supported Anatomical Structures
+## 🔍 Supported Anatomical Structures
 
 The FastnnUNet Inference Module supports segmentation of the following anatomical regions:
 
-1. **Skeletal System** (different precision levels):
+1. 🦴 **Skeletal System** (different precision levels):
    - Low-precision model (Low): Fast skeletal segmentation
    - Medium-precision model (Medium): More detailed skeletal structure segmentation
    - High-precision model (High): Complete detailed skeletal segmentation
    - Cortical bone segmentation: Optional detailed cortical bone segmentation
 
-2. **Visceral Organs**:
+2. 🫀 **Visceral Organs**:
    - Thoracic organ segmentation
    - Abdominal organ segmentation (standard and extended versions)
    - Pelvic region segmentation
 
-3. **Specialized Regions**:
+3. 🧠 **Specialized Regions**:
    - Head and neck segmentation (9-region and 30-region versions)
    - Spine segmentation
    - Limb segmentation
 
-4. **Whole Body Segmentation**:
+4. 👤 **Whole Body Segmentation**:
    - Complete whole-body multi-organ segmentation
 
-## Configuration Description
+## ⚙️ Configuration Description
 
 Same as the original nnUNet, FastnnUNet supports the following configurations:
 
@@ -67,9 +67,9 @@ Same as the original nnUNet, FastnnUNet supports the following configurations:
     5. Suitable for processing high-resolution or large-volume medical images
     6. Compared to the original nnUNet, both stages get performance improvements
 
-## Usage
+## 📋 Usage
 
-### Basic Usage
+### 🔰 Basic Usage
 
 FastnnUNet provides a simple and easy-to-use command line interface:
 
@@ -90,7 +90,7 @@ Parameter description:
   - `limb`: Limb segmentation
 - `--enable_subseg`: Enable detailed cortical bone segmentation (only valid in bone mode)
 
-### Example Commands
+### 📝 Example Commands
 
 ```bash
 # Skeletal segmentation
@@ -109,39 +109,39 @@ python inference/fastnnunet.py --input img/abdomen_ct.nii.gz --mode abdomen
 python inference/fastnnunet.py --input img/whole_body.nii.gz --mode total
 ```
 
-### Advanced Inference Features
+### 🚀 Advanced Inference Features
 
 FastnnUNet is optimized with ONNX runtime and supports the following advanced inference features:
 
-1. **Automatic Model Selection**: Automatically selects the best model based on anatomical region
-2. **Sliding Window Inference**: Enabled by default, can process inputs of arbitrary size
-3. **Mirror Enhancement**: Improves segmentation quality through mirroring augmentation
-4. **Multi-threading Acceleration**: Automatically utilizes multi-core CPUs for pre- and post-processing
+1. 🤖 **Automatic Model Selection**: Automatically selects the best model based on anatomical region
+2. 🔁 **Sliding Window Inference**: Enabled by default, can process inputs of arbitrary size
+3. 🪞 **Mirror Enhancement**: Improves segmentation quality through mirroring augmentation
+4. 🧵 **Multi-threading Acceleration**: Automatically utilizes multi-core CPUs for pre- and post-processing
 
-## Inference Pipeline
+## 🔄 Inference Pipeline
 
 The FastnnUNet inference pipeline includes the following steps:
 
-1. **Image Loading and Preprocessing**:
+1. 📥 **Image Loading and Preprocessing**:
    - Read medical images and standardize orientation (LPS direction)
    - Resample to target resolution according to model configuration
    - Apply windowing and normalization
 
-2. **Optimized Inference**:
+2. 🧠 **Optimized Inference**:
    - Use ONNX Runtime for efficient inference
    - Apply sliding window technique to process large volume data
    - Selectively use mirror enhancement to improve accuracy
 
-3. **Specialized Postprocessing**:
+3. 🔧 **Specialized Postprocessing**:
    - Apply specialized postprocessing algorithms for different anatomical structures
    - Connected component analysis and morphological operations
    - Small region filtering and hole filling
 
-4. **Result Saving**:
+4. 💾 **Result Saving**:
    - Automatically save to the results directory
    - Maintain the spatial information and orientation of the original image
 
-## Performance Comparison
+## 📊 Performance Comparison
 
 The table below shows the performance comparison between FastnnUNet and the original nnUNet on typical medical image segmentation tasks:
 
@@ -150,7 +150,7 @@ The table below shows the performance comparison between FastnnUNet and the orig
 | Original nnUNet | Baseline | Baseline | Baseline | Baseline |
 | FastnnUNet | Comparable | 20-50x improvement | 70% reduction | 80% reduction |
 
-## System Requirements
+## 💻 System Requirements
 
 - CUDA-compatible GPU (recommended at least 4GB VRAM)
 - CUDA 11.0+
@@ -159,19 +159,19 @@ The table below shows the performance comparison between FastnnUNet and the orig
 - SimpleITK
 - NumPy, SciPy, scikit-image
 
-## Frequently Asked Questions
+## ❓ Frequently Asked Questions
 
-1. **Q: Are there differences in model prediction results compared to the original nnUNet?**  
+1. 🤔 **Q: Are there differences in model prediction results compared to the original nnUNet?**  
    A: In the vast majority of cases, segmentation results are comparable to the original nnUNet, with Dice coefficient differences typically within 0.5%.
 
-2. **Q: How can I further improve inference speed?**  
+2. 🏎️ **Q: How can I further improve inference speed?**  
    A: For skeletal segmentation, you can use the low-precision model (bone_seg_low); disabling mirror enhancement can also improve speed.
 
-3. **Q: How to handle medical images with non-standard orientations?**  
+3. 🧭 **Q: How to handle medical images with non-standard orientations?**  
    A: FastnnUNet will automatically convert input images to standard LPS orientation, no manual preprocessing required.
 
-4. **Q: What medical image formats are supported?**  
+4. 📁 **Q: What medical image formats are supported?**  
    A: Currently supports NIfTI format (.nii and .nii.gz), with DICOM support planned for future updates.
 
-5. **Q: How to change model configurations?**  
+5. ⚙️ **Q: How to change model configurations?**  
    A: Model configuration files are located in the `inference/config/3d_fullres/` directory and can be adjusted as needed.
