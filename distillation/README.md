@@ -32,6 +32,7 @@ FastnnUNet knowledge distillation employs advanced knowledge transfer strategies
 
 3. 👨‍🏫 **Multi-teacher Ensemble Learning**:
    - Simultaneously leverage ensemble knowledge from probabilistic maps of multiple teacher models (different folds), instead of having to reason about each of the 5 folded models once and pool the predictions
+   - Simplify and get rid of nnUNet's original idea of finding the best model after training a 5-fold model
    - Capture complementary information between models, improving generalization ability
 
 ## 🔧 Installation Requirements
