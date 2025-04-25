@@ -1,6 +1,6 @@
 # FastnnUNet
 
-FastnnUNet是一个基于nnUNetv2架构的高性能医学图像分割框架。通过结合知识蒸馏技术，它实现了与原始nnUNet相同的准确性，但推理性能提高了数十倍。
+FastnnUNet is a high-performance medical image segmentation framework based on the nnUNetv2 architecture. By combining knowledge distillation techniques, it achieves the same accuracy as the original nnUNet but with inference performance improved by tens of times.
 
 > ⚠️ **Important Note**: The full FastnnUNet includes a C++ version of the FastnnUNet code, but it is not available for this repository at this time, even though the stable version that has been engineered and tested has no problems.
 > 
