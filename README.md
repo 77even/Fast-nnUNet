@@ -24,7 +24,7 @@ FastnnUNet aims to address two major deficiencies of the original nnUNet framewo
 1. ⏱️ **Slow inference speed**: The original nnUNet, despite its high accuracy, has slow inference speed, making it difficult to meet real-time clinical application requirements
 2. 🖥️ **Deployment challenges**: Large model size, high computational resource requirements, difficult to deploy and migrate in resource-constrained environments
 
-Through knowledge distillation technology, FastnnUNet successfully solves these problems while maintaining segmentation accuracy comparable to the original nnUNet. The model supports multiple deployment formats:
+Through a new 3D topological map knowledge distillation technique derived from the native nnUNet framework, FastnnUNet successfully solves these problems while maintaining segmentation accuracy comparable to the original nnUNet. The model supports multiple deployment formats:
 - 🔥 **PyTorch**: Supports native PyTorch format, suitable for research environments
 - 🌐 **ONNX**: Supports ONNX format export, providing cross-platform compatibility
 - ⚡ **TensorRT**: Supports high-performance TensorRT acceleration, achieving inference in seconds
