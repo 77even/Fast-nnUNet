@@ -2,6 +2,8 @@
 
 FastnnUNet is a high-performance medical image segmentation framework based on the nnUNetv2 architecture. By combining knowledge distillation techniques, it achieves the same accuracy as the original nnUNet but with inference performance improved by tens of times.
 
+The full FastnnUNet includes a C++ version of the FastnnUNet code, but it is not available at this time, even though the stable version that has been engineered and tested has no problems.
+
 ## Project Background and Objectives
 
 FastnnUNet aims to address two major deficiencies of the original nnUNet framework:
