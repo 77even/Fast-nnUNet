@@ -4,6 +4,8 @@ FastnnUNet is a high-performance medical image segmentation framework based on t
 
 The full FastnnUNet includes a C++ version of the FastnnUNet code, but it is not available for this repository at this time, even though the stable version that has been engineered and tested has no problems.
 
+Currently only the code about the distillation module is released, the code for the other modules is temporarily unavailable due to the needs of the current ongoing project, and developers using FastnnUNet are welcome to implement the remaining two modules on their own, which is full of challenges. Of course, feel free to use the distillation module to implement FastnnUNet models for training and testing against benchmark nnUNet models. If it is helpful to your work or study research, please feel free to add FastnnUNet's star mark! Of course, if you encounter any related problems or deficiencies, please contact me, and continuous improvement is my personal greatest original intention! ^-^
+
 ## Project Background and Objectives
 
 FastnnUNet aims to address two major deficiencies of the original nnUNet framework:
