@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="../public/fastnnunet-logo.png" alt="FastnnUNet Logo" width="600">
+</div>
+
 # ⚙️ FastnnUNet C++ Engine
 
 The FastnnUNet C++ Engine is a high-performance implementation of the FastnnUNet architecture designed for production-level deployment. Built on CUDA operators and TensorRT, this engine provides ultra-fast inference for CT and MRI images, completing the entire inference pipeline in seconds.

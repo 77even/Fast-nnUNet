@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="../public/fastnnunet-logo.png" alt="FastnnUNet Logo" width="600">
+</div>
+
 # 🧪 FastnnUNet Knowledge Distillation Training Module
 
 The FastnnUNet Knowledge Distillation Module is an advanced knowledge transfer system developed based on the nnUNetv2 framework. It transfers knowledge from high-performance but computationally complex teacher models (standard nnUNet) to lightweight student models, achieving significant reductions in model size and computational cost while maintaining segmentation accuracy.

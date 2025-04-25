@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="../public/fastnnunet-logo.png" alt="FastnnUNet Logo" width="600">
+</div>
+
 # 🚀 FastnnUNet Fast Inference Module
 
 The FastnnUNet Inference Module is a component for high-performance medical image segmentation based on knowledge distillation-trained lightweight models. This module maintains accuracy and preprocessing/postprocessing workflows identical to the original nnUNet, but with inference speed improved by tens of times.
