@@ -25,8 +25,8 @@ The FastnnUNet C++ Engine is a high-performance implementation of the FastnnUNet
 | Image Type | Size | Original nnUNet (PyTorch) | FastnnUNet (PyTorch) | FastnnUNet (C++/TensorRT) |
 |------------|------|--------------------------|---------------------|--------------------------|
 | Brain MRI  | 256×256×160 | 12-15s | 4-8s | 0.3-0.5s |
-| Chest CT   | 512×512×400 | 30-40s | 24-26s | 0.1-0.5s |
-| Abdominal CT | 512×512×500+ | 40-60s | 25-28s | 4.5-7.5s |
+| Chest CT   | 512×512×400 | 30-40s | 14-16s | 0.1-0.5s |
+| Abdominal CT | 512×512×500+ | 40-60s | 15-18s | 4.5-7.5s |
 
 *All metrics measured on NVIDIA RTX 4080 3060 2080Ti GPUs
 
