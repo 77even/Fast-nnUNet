@@ -50,7 +50,7 @@ Through knowledge distillation technology, FastnnUNet successfully solves these 
 
 ## System Components
 
-The system consists of two main parts:
+The system consists of three main parts:
 
 ### 1. Knowledge Distillation Module
 
@@ -59,6 +59,10 @@ Used for knowledge transfer from standard nnUNet models (teacher models) to ligh
 ### 2. Fast Inference Module
 
 Performs efficient inference based on distilled lightweight models, significantly improving performance while maintaining accuracy. For detailed information, please refer to the [Inference Module Documentation](./inference/README.md).
+
+### 3. C++ Engine Module
+
+A high-performance C++ implementation of FastnnUNet built on CUDA operators and TensorRT for production-level deployment. This engine enables ultra-fast inference (seconds) for CT and MRI images in clinical settings. For detailed information, please refer to the [C++ Engine Documentation](./engine/README.md).
 
 ## Usage Instructions
 
@@ -115,6 +119,7 @@ The table below shows the comparison between FastnnUNet and the original nnUNet 
 | FastnnUNet (PyTorch) | Comparable | 5-10x improvement | 75-95% reduction | 70% reduction | Medium |
 | FastnnUNet (ONNX) | Comparable | 10-20x improvement | 75-95% reduction | 80% reduction | Simple |
 | FastnnUNet (TensorRT) | Comparable | 20-50x improvement | 75-95% reduction | 85% reduction | Medium |
+| FastnnUNet (C++/TensorRT) | Comparable | 30-60x improvement | 75-95% reduction | 85% reduction | Production-ready |
 
 ## Citation
 
