@@ -39,19 +39,25 @@ The FastnnUNet C++ Engine is a high-performance implementation of the FastnnUNet
 ### 💼 C++ API Example
 
 ```cpp
-#include "fastnnunet/engine.h"
+#include "fast_nnunet_tools.h"
+#include "fast_nnunet_load_image.h"
+#include "fast_nnunet_engine.h"
+#include "fast_nnunet_eva.h"
 
-// Initialize engine with model path
-FastnnUNet::Engine engine("path/to/trt/model");
+// initialization
+const auto Engine = std::make_shared<FastnnUNet::Engine>();
+Engine->set_config("configs/nnunet_bone_low_config.ini");
+Engine->set_workspace("models/batch" ,false, true);
 
-// Load and preprocess image
-auto image = engine.loadImage("patient_ct.nii.gz/.nii");
+// load data
+const std::string nii_file = "test_image/headneck.nii.gz";
+const auto [image, inimg_raw, original_orientation] = Data::LoadData(nii_file);
 
-// Run inference
-auto segmentation = engine.infer(image);
+// infer
+const auto output_mask = Engine->infer(inimg_raw, image, true, false, true);
 
-// Save result
-engine.saveSegmentation(segmentation, "output_segmentation.nii.gz");
+// save result
+Tools::save_mask(output_mask, image, "output_mask.nii.gz");
 ```
 
 ## 🛠️ Building from Source
