@@ -10,7 +10,7 @@ FastnnUNet is a high-performance medical image segmentation framework based on t
 > 
 > 🔍 **Current Release Status**: Currently only the code about the distillation module is released, the code for the other modules is temporarily unavailable due to the needs of the current ongoing project. Developers using FastnnUNet are welcome to implement the remaining two modules on their own, which is full of challenges. Of course, feel free to use the distillation module to implement FastnnUNet models for training and testing against benchmark nnUNet models.
 >
-> > ⚠️ **No commercial use is allowed**
+> ⚠️ **No commercial use is allowed**
 >
 > 🚀 **Update Date**: April 25, 2025
 > 
