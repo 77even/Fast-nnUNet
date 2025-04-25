@@ -28,7 +28,7 @@ The FastnnUNet C++ Engine is a high-performance implementation of the FastnnUNet
 | Chest CT   | 512×512×400 | 30-40s | 14-16s | 0.1-0.5s |
 | Abdominal CT | 512×512×500+ | 40-60s | 15-18s | 4.5-7.5s |
 
-*All metrics measured on NVIDIA RTX 4080 3060 2080Ti GPUs
+*All metrics measured on NVIDIA RTX 5070Ti 4090 4080 3080 3060 3050 2080Ti GPUs
 
 ## Usage
 
@@ -78,7 +78,7 @@ The C++ engine uses optimized TensorRT models. Convert your ONNX models using:
 ```bash
 
 # From ONNX
-trtexec --onnx path/to/model.onnx --output engine.trt --fp16 --shapes=input:batch_size x 1 x D x H x W
+trtexec --onnx path/to/model.onnx --saveEngine engine.trt --fp16 --shapes=input:batch_size x 1 x D x H x W(enable batch infer)
 ```
 
 ## License
