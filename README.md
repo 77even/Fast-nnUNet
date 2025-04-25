@@ -2,15 +2,15 @@
 
 FastnnUNet是一个基于nnUNetv2架构的高性能医学图像分割框架。通过结合知识蒸馏技术，它实现了与原始nnUNet相同的准确性，但推理性能提高了数十倍。
 
-> ⚠️ **重要说明**: 完整的FastnnUNet包含FastnnUNet代码的C++版本，但目前在此存储库中暂不提供，尽管已经过工程化和测试的稳定版本没有问题。
+> ⚠️ **Important Note**: The full FastnnUNet includes a C++ version of the FastnnUNet code, but it is not available for this repository at this time, even though the stable version that has been engineered and tested has no problems.
 > 
-> 🚀 **当前发布状态**: 目前仅发布了关于蒸馏模块的代码，由于当前正在进行的项目需求，其他模块的代码暂时不可用。欢迎使用FastnnUNet的开发者自行实现剩余的两个模块，这充满了挑战。当然，也欢迎使用蒸馏模块实现FastnnUNet模型，用于训练和针对基准nnUNet模型进行测试。
+> 🔍 **Current Release Status**: Currently only the code about the distillation module is released, the code for the other modules is temporarily unavailable due to the needs of the current ongoing project. Developers using FastnnUNet are welcome to implement the remaining two modules on their own, which is full of challenges. Of course, feel free to use the distillation module to implement FastnnUNet models for training and testing against benchmark nnUNet models.
 >
-> 📅 **更新时间**: 2025年4月25日
+> 🚀 **Update Date**: April 25, 2025
 > 
-> 🚀 **即将推出**: 其余模块将在未来陆续发布，敬请期待!
+> 🚀 **Coming Soon**: The remaining modules will be released successively in the future, stay tuned!
 > 
-> ⭐ 如果它对您的工作或研究有所帮助，请随时为FastnnUNet添加星标！如果您遇到任何相关问题或不足之处，请联系我，持续改进是我个人最大的初衷！^-^
+> ⭐ If it is helpful to your work or study research, please feel free to add FastnnUNet's star mark! Of course, if you encounter any related problems or deficiencies, please contact me, and continuous improvement is my personal greatest original intention! ^-^
 
 ## Project Background and Objectives
 
