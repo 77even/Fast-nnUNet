@@ -131,7 +131,7 @@ The table below shows the comparison between FastnnUNet and the original nnUNet 
 
 ## Citation
 
-If you use FastnnUNet, please cite:
+FastnnUNet is overwhelmingly derived from nnUNet, If you use FastnnUNet, please cite:
 
 ```
 Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021). nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation. Nature methods, 18(2), 203-211.
