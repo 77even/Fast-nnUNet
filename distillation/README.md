@@ -145,8 +145,8 @@ The table below shows the comparison of student model performance with different
 | Reduction Factor | Parameter Reduction | Memory Usage Reduction | Inference Speed Improvement | Dice Coefficient Change |
 |------------|----------|------------|-----------|------------|
 | r=2        | 75%      | 70%        | ~20x     | <0.5%      |
-| r=4        | 94%      | 88%        | ~35x     | 1-2%       |
-| r=8        | 98%      | 95%        | ~50x     | 2-5%       |
+| r=4        | 94%      | 88%        | ~35x     | <1.0%      |
+| r=8        | 98%      | 95%        | ~50x     | <1.5%        |
 
 ## 🚀 Advanced Usage
 
