@@ -1,7 +1,7 @@
 # FastnnUNet 🔬
 
 <div align="center">
-  <img src="./public/fastnnunet-logo.png" alt="FastnnUNet Logo" width="600">
+  <img src="./public/fastnnunet-logo.png" alt="FastnnUNet Logo" width="1000">
 </div>
 
 FastnnUNet is a high-performance medical image segmentation framework based on the nnUNetv2 architecture. By combining knowledge distillation techniques, it achieves the same accuracy as the original nnUNet but with inference performance improved by tens of times.
