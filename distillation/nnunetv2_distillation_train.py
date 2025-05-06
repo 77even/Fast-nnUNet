@@ -70,6 +70,8 @@ def run_distillation_training(dataset_id,
                              feature_reduction_factor=2,
                              continue_training=False,
                              val_with_mirroring=True,
+                             rotate_training_folds=False,
+                             rotate_folds_frequency=5,
                              device=None,
                              epochs=1000):
     """
@@ -87,6 +89,8 @@ def run_distillation_training(dataset_id,
         feature_reduction_factor: Feature reduction factor
         continue_training: Whether to continue previous training
         val_with_mirroring: Whether to use mirroring during validation
+        rotate_training_folds: Whether to rotate training folds during training
+        rotate_folds_frequency: How often to rotate folds (in epochs)
         device: Device to use, e.g., 'cuda:0'
         epochs: Maximum number of training epochs
     """
@@ -164,13 +168,12 @@ def run_distillation_training(dataset_id,
         alpha=alpha,
         temperature=temperature,
         feature_reduction_factor=feature_reduction_factor,
+        rotate_training_folds=rotate_training_folds,
+        rotate_folds_frequency=rotate_folds_frequency,
         device=device
     )
     
-    # Set maximum number of epochs
-    trainer.num_epochs = epochs
-    
-    # Print training configuration
+    # Output training configuration information
     print(f"\n============ Knowledge Distillation Training Configuration ============")
     print(f"Dataset name: {dataset_name}")
     print(f"Configuration: {configuration}")
@@ -183,25 +186,46 @@ def run_distillation_training(dataset_id,
     print(f"Feature reduction factor: {feature_reduction_factor}")
     print(f"Continue training: {continue_training}")
     print(f"Validation with mirroring: {val_with_mirroring}")
+    print(f"Rotate training folds: {rotate_training_folds}")
+    if rotate_training_folds:
+        print(f"Rotate folds frequency: {rotate_folds_frequency} epochs")
     print(f"Device: {device}")
     print(f"Maximum training epochs: {epochs}")
     print(f"=========================================\n")
-
-    # If continuing training, load checkpoint
-    if continue_training:
-        print("Continuing previous training...")
-        expected_checkpoint_file = join(trainer.output_folder, "checkpoint_latest.pth")
-        if os.path.exists(expected_checkpoint_file):
-            trainer.load_checkpoint(expected_checkpoint_file)
-        else:
-            print(f"Warning: Could not find latest checkpoint file {expected_checkpoint_file}, will start training from scratch")
     
-    # Set whether to use mirroring during validation
+    # Set maximum epoch count
+    trainer.num_epochs = epochs
+    
+    # Set whether to use mirroring for validation
     if not val_with_mirroring:
         trainer.inference_allowed_mirroring_axes = []
     
-    # Initialize and run training
-    trainer.initialize()
+    # First check if checkpoint file exists
+    expected_checkpoint_file = join(trainer.output_folder, "checkpoint_latest.pth")
+    checkpoint_exists = os.path.exists(expected_checkpoint_file)
+    
+    # Determine training flow based on whether to continue training and if checkpoint exists
+    if continue_training and checkpoint_exists:
+        print(f"Continuing previous training, loading checkpoint: {expected_checkpoint_file}")
+        
+        # Add a precaution: don't initialize in the constructor, but actively initialize before reading the checkpoint file
+        # This way there is no repeated initialization problem
+        if not trainer.was_initialized:
+            trainer.initialize()
+            
+        # Load checkpoint
+        trainer.load_student_checkpoint(expected_checkpoint_file)
+        print(f"Successfully loaded checkpoint, will continue training from epoch {trainer.current_epoch}")
+    else:
+        # If not continuing training or no checkpoint file, start training from scratch
+        if continue_training and not checkpoint_exists:
+            print(f"Warning: Could not find checkpoint file {expected_checkpoint_file}, will start training from scratch")
+        
+        # Initialize trainer
+        if not trainer.was_initialized:
+            trainer.initialize()
+    
+    # Run training
     trainer.run_training()
 
     # Run validation
@@ -212,7 +236,7 @@ def main():
     parser = argparse.ArgumentParser(description='nnUNetv2 Knowledge Distillation Training')
     parser.add_argument('-d', '--dataset_id', type=str, required=True, help='Dataset ID (e.g., 776)')
     parser.add_argument('-c', '--configuration', type=str, default='3d_fullres', help='nnUNet configuration (default: 3d_fullres)')
-    parser.add_argument('-f', '--fold', type=int, default=0, help='Fold number for training (default: 0)')
+    parser.add_argument('-f', '--start_fold', type=int, default=0, help='Start fold number for training (default: 0)')
     parser.add_argument('-t', '--teacher_model_folder', type=str, help='Path to teacher model folder (if not provided, will be auto-constructed)')
     parser.add_argument('-tf', '--teacher_folds', type=int, nargs='+', 
                        help='List of teacher model fold numbers, e.g., 0 or 0 1 2 3 4. If not specified, all available folds will be auto-detected')
@@ -224,6 +248,10 @@ def main():
     parser.add_argument('-d_device', '--device', type=str, help='Device to use, e.g., "cuda:0"')
     parser.add_argument('-c_continue', '--continue_training', action='store_true', help='Whether to continue previous training')
     parser.add_argument('-disable_mirroring', '--disable_val_mirroring', action='store_true', help='Disable mirroring during validation')
+    parser.add_argument('-rotate_folds', '--rotate_training_folds', action='store_true', 
+                       help='Enable rotating training folds periodically')
+    parser.add_argument('-rotate_freq', '--rotate_folds_frequency', type=int, default=400, 
+                       help='How often to rotate folds (in epochs) (default: 5)')
     parser.add_argument('-e', '--epochs', type=int, default=1000, help='Maximum number of training epochs (default: 1000)')
     
     # Parse command line arguments
@@ -242,6 +270,8 @@ def main():
         feature_reduction_factor=args.reduction_factor,
         continue_training=args.continue_training,
         val_with_mirroring=not args.disable_val_mirroring,
+        rotate_training_folds=args.rotate_training_folds,
+        rotate_folds_frequency=args.rotate_folds_frequency,
         device=args.device,
         epochs=args.epochs
     )

@@ -28,10 +28,12 @@ from torch.nn import Conv3d, InstanceNorm3d, LeakyReLU, ConvTranspose3d
 from collections import OrderedDict
 import numpy as np
 import os
+import json
 from typing import Union, List, Tuple
 from torch import distributed as dist
 from time import time
 from batchgenerators.utilities.file_and_folder_operations import *
+from torch._dynamo import OptimizedModule
 
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
@@ -196,6 +198,8 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
                  alpha=0.3,
                  temperature=3.0,
                  feature_reduction_factor=2,
+                 rotate_training_folds=False,
+                 rotate_folds_frequency=5,
                  device=torch.device('cuda')):
         """
         nnUNet knowledge distillation trainer
@@ -208,8 +212,13 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             alpha: Distillation loss weight
             temperature: Distillation temperature
             feature_reduction_factor: Feature channel reduction factor (2 means channel number halved)
+            rotate_training_folds: Whether to rotate training folds during training
+            rotate_folds_frequency: How often to rotate folds (in epochs)
             device: Compute device
         """
+        # Ensure was_initialized is set to False before initialization
+        self.was_initialized = False
+        
         super().__init__(plans, configuration, fold, dataset_json, device)
         
         # Save distillation parameters
@@ -220,12 +229,93 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
         self.temperature = temperature
         self.feature_reduction_factor = feature_reduction_factor
         
+        # Fold rotation parameters
+        self.rotate_training_folds = rotate_training_folds
+        self.rotate_folds_frequency = rotate_folds_frequency
+        self.initial_fold = fold  # Save the initial fold
+        self.all_available_folds = None  # Will be set in initialize_fold_rotation if needed
+        self.fold_rotation_counter = 0  # Counter for fold rotations
+        
         # These variables will be set in initialize
         self.teacher_models = []
+
+    def initialize_fold_rotation(self):
+        """Initialize fold rotation by identifying all available folds in the dataset"""
+        if not self.rotate_training_folds:
+            return
+            
+        # Determine all available folds based on split file
+        split_file = join(self.preprocessed_dataset_folder, "splits_final.json")
+        if not isfile(split_file):
+            self.print_to_log_file(f"Warning: Cannot find splits_final.json at {split_file}, disabling fold rotation")
+            self.rotate_training_folds = False
+            return
+            
+        # Load splits file
+        with open(split_file, 'r') as f:
+            splits = json.load(f)
+            
+        # Get number of folds from splits
+        self.all_available_folds = list(range(len(splits)))
         
+        self.print_to_log_file(f"Fold rotation enabled. Available folds: {self.all_available_folds}")
+        self.print_to_log_file(f"Will rotate folds every {self.rotate_folds_frequency} epochs")
+        
+    def update_fold_for_next_rotation(self):
+        """
+        Update fold for next training period based on rotation schedule
+        Returns true if fold was changed, false otherwise
+        """
+        if not self.rotate_training_folds or self.all_available_folds is None:
+            return False
+            
+        # Check if it's time to rotate
+        if (self.current_epoch % self.rotate_folds_frequency) != 0 or self.current_epoch == 0:
+            return False
+            
+        # Determine next fold
+        current_fold_index = self.all_available_folds.index(self.fold)
+        next_fold_index = (current_fold_index + 1) % len(self.all_available_folds)
+        next_fold = self.all_available_folds[next_fold_index]
+        
+        # Skip rotation if we've gone through all folds
+        if self.fold_rotation_counter >= len(self.all_available_folds):
+            self.print_to_log_file(f"Completed all fold rotations, returning to original fold {self.initial_fold}")
+            next_fold = self.initial_fold
+            self.fold_rotation_counter = 0
+        
+        # Update fold if different
+        if next_fold != self.fold:
+            self.print_to_log_file(f"Rotating training fold from {self.fold} to {next_fold}")
+            self.fold = next_fold
+            self.fold_rotation_counter += 1
+            
+            # Reinitialize data loaders with new fold
+            self.print_to_log_file("Reinitializing data loaders for new fold")
+            self.do_split()
+            self.setup_DA_params()
+            
+            # Reinitialize data loaders
+            self.dl_tr, self.dl_val = self.get_plain_dataloaders()
+            
+            # Get batch generators
+            self.tr_gen, self.val_gen = self._get_batch_generators()
+            
+            return True
+            
+        return False
+    
     def initialize(self):
+        # Check if already initialized, if so, return directly
+        if self.was_initialized:
+            self.print_to_log_file("Trainer was already initialized, skipping initialization")
+            return
+            
         # First execute parent class initialization
         super().initialize()
+        
+        # Initialize fold rotation if enabled
+        self.initialize_fold_rotation()
         
         # Load teacher model
         self.load_teacher_model()
@@ -243,7 +333,9 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
         self.print_to_log_file(f"temperature (Distillation temperature): {self.temperature}")
         self.print_to_log_file(f"feature_reduction_factor (Feature reduction factor): {self.feature_reduction_factor}")
         self.print_to_log_file(f"Teacher model fold: {self.teacher_fold}")
-    
+        if self.rotate_training_folds:
+            self.print_to_log_file(f"Fold rotation enabled with frequency: {self.rotate_folds_frequency} epochs")
+            
     def load_teacher_model(self):
         """Load teacher model"""
         if self.teacher_model_folder is None:
@@ -595,7 +687,7 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
         
         
     def on_epoch_end(self):
-        """epoch end processing, increase distillation loss record"""
+        """epoch end processing, increase distillation loss record and handle fold rotation"""
         self.logger.log('epoch_end_timestamps', time(), self.current_epoch)
 
         self.print_to_log_file('train_loss', np.round(self.logger.my_fantastic_logging['train_losses'][-1], decimals=4))
@@ -632,5 +724,112 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
 
         if self.local_rank == 0:
             self.logger.plot_progress_png(self.output_folder)
+            
+        # Handle fold rotation if enabled
+        fold_updated = self.update_fold_for_next_rotation()
+        if fold_updated:
+            self.print_to_log_file(f"Fold rotated, now training with fold {self.fold}")
 
-        self.current_epoch += 1 
+        self.current_epoch += 1
+        
+    def load_student_checkpoint(self, filename_or_checkpoint: Union[dict, str]) -> None:
+        """
+        Overridden checkpoint loading method specifically for handling student model loading
+        """
+        # Check if already initialized
+        if not self.was_initialized:
+            raise RuntimeError("Must call initialize() before loading checkpoint! Please make sure to call the initialize() method first.")
+            
+        self.print_to_log_file(f"Loading checkpoint from {filename_or_checkpoint if isinstance(filename_or_checkpoint, str) else 'dict'}")
+        
+        # Load checkpoint
+        if isinstance(filename_or_checkpoint, str):
+            checkpoint = torch.load(filename_or_checkpoint, map_location=self.device, weights_only=False)
+        else:
+            checkpoint = filename_or_checkpoint
+
+        # Restore training state from checkpoint
+        self.my_init_kwargs = checkpoint['init_args']
+        self.current_epoch = checkpoint['current_epoch']
+        self.logger.load_checkpoint(checkpoint['logging'])
+        self._best_ema = checkpoint['_best_ema']
+        if 'inference_allowed_mirroring_axes' in checkpoint.keys():
+            self.inference_allowed_mirroring_axes = checkpoint['inference_allowed_mirroring_axes']
+            
+        # Get network weights
+        new_state_dict = {}
+        for k, value in checkpoint['network_weights'].items():
+            key = k
+            # Handle weights created by DataParallel
+            if key not in self.network.state_dict().keys() and key.startswith('module.'):
+                key = key[7:]
+            # Add to new state dictionary
+            new_state_dict[key] = value
+        
+        # Check if model structure matches
+        model_keys = set(self.network.state_dict().keys())
+        checkpoint_keys = set(new_state_dict.keys())
+        
+        # Check missing keys
+        missing_keys = model_keys - checkpoint_keys
+        unexpected_keys = checkpoint_keys - model_keys
+        
+        if len(missing_keys) > 0:
+            self.print_to_log_file(f"Warning: The following keys are missing in the checkpoint: {missing_keys}")
+        if len(unexpected_keys) > 0:
+            self.print_to_log_file(f"Warning: The checkpoint contains unexpected keys: {unexpected_keys}")
+        
+        # Try to load weights into model
+        try:
+            # Load directly to the actual network, no temporary network validation needed
+            if self.is_ddp:
+                if isinstance(self.network.module, OptimizedModule):
+                    self.network.module._orig_mod.load_state_dict(new_state_dict, strict=False)
+                else:
+                    self.network.module.load_state_dict(new_state_dict, strict=False)
+            else:
+                if isinstance(self.network, OptimizedModule):
+                    self.network._orig_mod.load_state_dict(new_state_dict, strict=False)
+                else:
+                    self.network.load_state_dict(new_state_dict, strict=False)
+                    
+            self.print_to_log_file("Successfully loaded network weights")
+            
+        except Exception as e:
+            self.print_to_log_file(f"Error loading model weights: {e}")
+            self.print_to_log_file("Will try to load compatible parts")
+            
+            # Try to load compatible parts
+            model_dict = self.network.state_dict()
+            pretrained_dict = {k: v for k, v in new_state_dict.items() if k in model_dict and model_dict[k].shape == v.shape}
+            model_dict.update(pretrained_dict)
+            
+            if self.is_ddp:
+                if isinstance(self.network.module, OptimizedModule):
+                    self.network.module._orig_mod.load_state_dict(model_dict)
+                else:
+                    self.network.module.load_state_dict(model_dict)
+            else:
+                if isinstance(self.network, OptimizedModule):
+                    self.network._orig_mod.load_state_dict(model_dict)
+                else:
+                    self.network.load_state_dict(model_dict)
+                    
+            self.print_to_log_file(f"Successfully loaded partial model weights, loaded {len(pretrained_dict)} parameters")
+            
+        # Load optimizer state
+        try:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state'])
+            self.print_to_log_file("Successfully loaded optimizer state")
+        except Exception as e:
+            self.print_to_log_file(f"Error loading optimizer state, will use new optimizer: {e}")
+        
+        # Load gradient scaler state
+        if self.grad_scaler is not None and 'grad_scaler_state' in checkpoint and checkpoint['grad_scaler_state'] is not None:
+            try:
+                self.grad_scaler.load_state_dict(checkpoint['grad_scaler_state'])
+                self.print_to_log_file("Successfully loaded gradient scaler state")
+            except Exception as e:
+                self.print_to_log_file(f"Error loading gradient scaler state: {e}")
+                
+        self.print_to_log_file(f"Resuming training from epoch {self.current_epoch}") 
