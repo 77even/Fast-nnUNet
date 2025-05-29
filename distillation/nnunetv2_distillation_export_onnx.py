@@ -62,6 +62,7 @@ def export_to_onnx(dataset_id,
                    device=None,
                    dynamic_axes=True,
                    input_shape=None,
+                   nnunet_style=False,
                    verbose=False):
     """
     Export trained nnUNet distillation student model to ONNX format
@@ -76,6 +77,7 @@ def export_to_onnx(dataset_id,
         device: Device to use, e.g., 'cuda:0'
         dynamic_axes: Whether to use dynamic axes, if True allows different input shapes
         input_shape: Custom input shape (b, c, x, y, z), default None uses model's accepted shape
+        nnunet_style: Whether to use nnUNet style output
         verbose: Whether to display detailed information
     """
     # Parse dataset ID to full name
@@ -128,6 +130,11 @@ def export_to_onnx(dataset_id,
     # Initialize network architecture (full trainer initialization not needed)
     num_input_channels = determine_num_input_channels(trainer.plans_manager, trainer.configuration_manager, dataset_json)
     num_output_channels = trainer.label_manager.num_segmentation_heads
+
+    # if nnunet_style is True, force using single channel input
+    if nnunet_style:
+        num_input_channels = 1
+        print(f"Using single channel fixed size mode, force using 1 input channel")
     
     print(f"Number of input channels: {num_input_channels}, Number of output channels: {num_output_channels}")
     
@@ -340,7 +347,12 @@ def export_to_onnx(dataset_id,
     if output_path is None:
         output_dir = join(model_folder_fold, "exported_models")
         os.makedirs(output_dir, exist_ok=True)
-        output_path = join(output_dir, f"model_fold{fold}_{feature_reduction_factor}x.onnx")
+
+        # add special identifier for single channel fixed size model
+        if nnunet_style:
+            output_path = join(output_dir, f"model_fold{fold}_{feature_reduction_factor}x_nnunet_format.onnx")
+        else:
+            output_path = join(output_dir, f"model_fold{fold}_{feature_reduction_factor}x.onnx")
     
     # Create input sample - use typical 3D medical image shape or custom shape
     if input_shape is None:
@@ -356,17 +368,35 @@ def export_to_onnx(dataset_id,
             except:
                 # Default shape
                 input_shape = (1, num_input_channels, 128, 128, 128)
+
+    # if nnunet_style is True, force using single channel fixed size input
+    if nnunet_style:
+        # force using single channel and fixed size
+        if input_shape is None or len(input_shape) != 5:
+            # use default fixed size
+            input_shape = (1, 1, 128, 128, 128)
+        else:
+            # keep original spatial dimensions, but set channel number to 1
+            input_shape = (input_shape[0], 1, input_shape[2], input_shape[3], input_shape[4])
+        
+        print(f"Using single channel fixed size mode, input shape: {input_shape}")
     
     dummy_input = torch.zeros(input_shape, dtype=torch.float32).to(device)
     
     print(f"Exporting model with input shape {input_shape}")
     
     # Set dynamic axes for ONNX export
-    if dynamic_axes:
+    if dynamic_axes and not nnunet_style:
         # Batch size and spatial dimensions are dynamic
         dynamic_axes_dict = {
             'input': {0: 'batch_size', 2: 'height', 3: 'width', 4: 'depth'},
             'output': {0: 'batch_size', 2: 'height', 3: 'width', 4: 'depth'}
+        }
+    elif dynamic_axes and nnunet_style:
+        # only batch size is dynamic, spatial dimensions are fixed
+        dynamic_axes_dict = {
+            'input': {0: 'batch_size'},
+            'output': {0: 'batch_size'}
         }
     else:
         dynamic_axes_dict = None
@@ -421,6 +451,7 @@ def main():
     parser.add_argument('-d_device', '--device', type=str, help='Device to use, e.g., "cuda:0"')
     parser.add_argument('--static', action='store_false', dest='dynamic_axes', help='Use static input shape instead of dynamic shape')
     parser.add_argument('--input_shape', type=int, nargs='+', help='Custom input shape (b c x y z)')
+    parser.add_argument('--nnunet_format', action='store_true', dest='single_channel_fixed_size', help='导出单通道固定尺寸模型 [batch_size, 1, 固定尺寸]')
     parser.add_argument('-v', '--verbose', action='store_true', help='Display detailed information')
     
     args = parser.parse_args()
@@ -443,6 +474,7 @@ def main():
         device=args.device,
         dynamic_axes=args.dynamic_axes,
         input_shape=input_shape,
+        nnunet_style=args.nnunet_format,
         verbose=args.verbose
     )
 
