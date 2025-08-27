@@ -34,7 +34,7 @@ Through a new 3D probability map knowledge distillation technique derived from t
 ## ✨ Key Features
 
 <div align="center">
-  <img src="./public/fastnnunet-arch.png" alt="FastnnUNet Logo" width="350">
+  <img src="./public/fastnnunet-arch.png" alt="FastnnUNet Logo" width="1000">
 </div>
 
 - **Based on nnUNetv2**: Inherits nnUNetv2's powerful adaptive architecture and excellent segmentation performance
