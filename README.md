@@ -34,7 +34,7 @@ Through a new 3D probability map knowledge distillation technique derived from t
 ## ✨ Key Features
 
 <div align="center">
-  <img src="./public/fastnnunet-arch.png" alt="FastnnUNet Logo" width="950">
+  <img src="./public/fastnnunet-arch.png" alt="FastnnUNet Logo" width="800">
 </div>
 
 - **Based on nnUNetv2**: Inherits nnUNetv2's powerful adaptive architecture and excellent segmentation performance
@@ -93,15 +93,6 @@ nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -v
 # Convert to TensorRT format (for ultimate performance optimization, requires additional steps)
 # Please refer to TensorRT documentation to convert ONNX models to TensorRT engines
 ```
-
-### 5. ⚡ Fast Inference
-
-Supports multiple inference methods:
-- **PyTorch Inference**: Suitable for research environments, highly flexible
-- **ONNX Inference**: Cross-platform compatible, simple deployment
-- **TensorRT Inference**: Based on CUDA operators, optimal performance, can achieve real-time performance in engineering deployments
-
-Application scenarios: Can be used for assisted interventional diagnosis, intraoperative real-time guidance, or rapid analysis and processing of large-scale medical imaging data.
 
 ## Citation
 
