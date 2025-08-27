@@ -34,7 +34,7 @@ Through a new 3D probability map knowledge distillation technique derived from t
 ## ✨ Key Features
 
 <div align="center">
-  <img src="./public/fastnnunet-arch.png" alt="FastnnUNet Logo" width="1000">
+  <img src="./public/fastnnunet-arch.png" alt="FastnnUNet Logo" width="950">
 </div>
 
 - **Based on nnUNetv2**: Inherits nnUNetv2's powerful adaptive architecture and excellent segmentation performance
@@ -44,9 +44,7 @@ Through a new 3D probability map knowledge distillation technique derived from t
 - **Multi-format Support**: Supports PyTorch, ONNX, and TensorRT formats, adapting to different deployment scenarios
 - **Lightweight Design**: Greatly reduces model parameters and computational load, suitable for edge device deployment
 
-## Workflow
-
-The system consists of three main parts:
+## Module
 
 ### 1. Knowledge Distillation Module
 
