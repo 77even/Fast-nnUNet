@@ -33,6 +33,10 @@ Through a new 3D probability map knowledge distillation technique derived from t
 
 ## ✨ Key Features
 
+<div align="center">
+  <img src="./public/fastnnunet-arch.png" alt="FastnnUNet Logo" width="350">
+</div>
+
 - **Based on nnUNetv2**: Inherits nnUNetv2's powerful adaptive architecture and excellent segmentation performance
 - **3D Probability Map Knowledge Distillation**: Uses 5-fold cross-validation trained teacher models to guide lightweight student model learning
 - 🚀 **High-performance Inference**: Maintains accuracy consistent with the original nnUNet, but with inference speed improved by tens of times
@@ -41,30 +45,6 @@ Through a new 3D probability map knowledge distillation technique derived from t
 - **Lightweight Design**: Greatly reduces model parameters and computational load, suitable for edge device deployment
 
 ## Workflow
-
-1. **Standard nnUNet Training**:
-   - Use the nnUNetv2 standard process for 5-fold cross-validation training
-   - Obtain high-precision but computationally intensive teacher models
-
-2. **Knowledge Distillation**:
-   - Train lightweight student models based on teacher models
-   - Jointly use soft labels and hard labels for distillation
-   - Maintain segmentation accuracy while significantly reducing parameter count and computational load
-
-3. **Multi-format Export and Deployment**:
-   - Support export to PyTorch, ONNX, and TensorRT formats
-   - Adapt to different hardware platforms and deployment environments
-   - Optimize performance for different formats
-
-4. ⚡ **Fast Inference**:
-   - Use distilled lightweight models for inference
-   - Fully compatible with nnUNet inference parameters
-   - Performance improved by tens of times
-   - Support multiple medical imaging modalities such as CT/MR
-   - No fixed Patch size required, completely dependent on nnUNet preprocessing configuration
-   - Achieve complete 3D image processing in seconds with TensorRT
-
-## Components
 
 The system consists of three main parts:
 
