@@ -18,7 +18,7 @@ FastnnUNet is a high-performance medical image segmentation framework based on t
 > 
 > <h3>❗❗ <strong>Attention</strong>: No commercial use is allowed</h3>
 
-## 🎯 Project Background and Objectives
+## Introduction
 
 FastnnUNet aims to address two major deficiencies of the original nnUNet framework:
 1. ⏱️ **Slow inference speed**: The original nnUNet, despite its high accuracy, has slow inference speed, making it difficult to meet real-time clinical application requirements
