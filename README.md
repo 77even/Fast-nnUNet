@@ -66,6 +66,15 @@ A high-performance C++ implementation of FastnnUNet built on CUDA operators and 
 
 **Fast-nnUNet Model Configuration:** - 👉 [Config](./engine/config)
 
+**Software Demo:**
+
+<video width="800" controls>
+  <source src="./public/fast_nnunet_demo.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+*This demo video uses the fast_nnunet_turbo abdominal model for demonstration, with the test region being the abdomen.*
+
 > **Note**: Currently only the full-body skeleton model is available, other models are temporarily restricted.
 
 ## How to Use
