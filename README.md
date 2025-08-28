@@ -62,8 +62,7 @@ A high-performance C++ implementation of FastnnUNet built on CUDA operators and 
 
 ### 🦴 Fast-nnUNet Full-Body Skeleton Model (fast_nnunet_bone_turbo) - 👉 [Hugging face](https://huggingface.co/justin888833/fast_nnunet_bone_turbo)
 
-**Fast-nnUNet Model Configuration:**
-- 👉 [Config](./engine/config)
+**Fast-nnUNet Model Configuration:** - 👉 [Config](./engine/config)
 
 > **Note**: Currently only the full-body skeleton model is available, other models are temporarily restricted.
 
