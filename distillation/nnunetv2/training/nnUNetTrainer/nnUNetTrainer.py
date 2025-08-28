@@ -69,7 +69,7 @@ from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
 
 class nnUNetTrainer(object):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
-                 device: torch.device = torch.device('cuda'), **kwargs):
+                 device: torch.device = torch.device('cuda')):
         # From https://grugbrain.dev/. Worth a read ya big brains ;-)
 
         # apex predator of grug is complexity
@@ -108,15 +108,8 @@ class nnUNetTrainer(object):
         # would also pickle the network etc. Bad, bad. Instead we just reinstantiate and then load the checkpoint we
         # need. So let's save the init args
         self.my_init_kwargs = {}
-        # 保存标准参数
         for k in inspect.signature(self.__init__).parameters.keys():
-            if k != 'kwargs': # 跳过kwargs
-                if k in locals():
-                    self.my_init_kwargs[k] = locals()[k]
-        
-        # 保存额外的kwargs参数
-        if len(kwargs) > 0:
-            self.my_init_kwargs.update(kwargs)
+            self.my_init_kwargs[k] = locals()[k]
 
         ###  Saving all the init args into class variables for later access
         self.plans_manager = PlansManager(plans)
