@@ -68,7 +68,7 @@ A high-performance C++ implementation of FastnnUNet built on CUDA operators and 
 
 **Software Demo:**
 
-https://github.com/user-attachments/assets/fast_nnunet_demo.mp4
+![Fast-nnUNet Demo](./public/fast_nnunet_demo.gif)
 
 *This demo video uses the fast_nnunet_turbo abdominal model for demonstration, with the test region being the abdomen.*
 
