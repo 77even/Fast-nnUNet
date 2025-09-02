@@ -12,9 +12,9 @@ FastnnUNet is a high-performance medical image segmentation framework based on t
 >
 > 🚀 **Update Date**: April 25, 2025
 >
-> 🚀 **Update Date**: August 27, 2025, FastnnUNet received patent authorization from the Patent Office. Patent title: "Lightweight 3D Medical Image Real-time Inference Method and System Based on Edge Computing", Publication No.: CN202510788224.
+> 🚀 **Notifications**: August 27, 2025, FastnnUNet received patent authorization from the Patent Office. Patent title: "Lightweight 3D Medical Image Real-time Inference Method and System Based on Edge Computing", Publication No.: CN202510788224.
 
-> 🚀 **Update**: The fast_nnunet_bone_turbo model and software demo for Fast-nnUNet are now available.
+> 🚀 **News**: The fast_nnunet_bone_turbo model and software demo for Fast-nnUNet are now available.
 > 
 > 🚀 **Coming Soon**: The remaining modules will be released successively in the future, stay tuned!
 > 
