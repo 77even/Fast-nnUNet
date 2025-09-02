@@ -60,7 +60,7 @@ Performs efficient inference based on distilled lightweight models, significantl
 
 A high-performance C++ implementation of FastnnUNet built on CUDA operators and TensorRT for production-level deployment. This engine enables ultra-fast inference (seconds) for CT and MRI images in clinical settings. For detailed information, please refer to the [C++ Engine Documentation](./engine/README.md).
 
-## 🚀 Update
+## 🚀 Notificatiosn
 
 ### 🦴 Fast-nnUNet Full-Body Skeleton Model (fast_nnunet_bone_turbo) - 👉 [Hugging face](https://huggingface.co/justin888833/fast_nnunet_bone_turbo)
 
