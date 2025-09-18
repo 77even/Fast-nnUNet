@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="nnunetv2_distillation",
-    version="0.1",
+    version="1.2.0",
     packages=find_packages(),
     install_requires=[
         "torch>=1.6.0",
@@ -10,13 +10,21 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'nnUNetv2_distillation_train=nnunetv2_distillation_train:main',
-            'nnUNetv2_distillation_export_onnx=nnunetv2_distillation_export_onnx:main',
+            'nnUNetv2_distillation_train=fast_nnunet_distillation_train:main',
+            'nnUNetv2_resenc_distillation_train=fast_nnunet_resenc_distillation_train:main',
+            'nnUNetv2_distillation_export_onnx=fast_nnunet_distillation_export_onnx:main',
+            'nnUNetv2_resenc_distillation_export_onnx=fast_nnunet_resenc_distillation_export_onnx:main',
         ],
     },
+    py_modules=[
+        'fast_nnunet_distillation_train',
+        'fast_nnunet_resenc_distillation_train',
+        'fast_nnunet_distillation_export_onnx',
+        'fast_nnunet_resenc_distillation_export_onnx'
+    ],
     python_requires='>=3.7',
     author="Justin",
-    author_email="",
-    description="Knowledge Distillation for FastnnUNet based on nnUNetv2",
+    author_email="ljq122377@gmail.com",
+    description="Knowledge distillation module for FastnnUNet based on nnUNetV2",
     keywords="deep learning, segmentation, knowledge distillation, nnUNet",
 ) 
