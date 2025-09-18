@@ -1,7 +1,7 @@
 # FastnnUNet 🔬
 
 <div align="center">
-  <img src="./public/fastnnunet-logo.png" alt="FastnnUNet Logo" width="1000">
+  <img src="./docs/assets/fastnnunet-logo.png" alt="FastnnUNet Logo" width="1000">
 </div>
 
 FastnnUNet is a high-performance medical image segmentation framework based on the nnUNetv2 architecture. By combining knowledge distillation techniques, it achieves the same accuracy as the original nnUNet but with inference performance improved by tens of times.
@@ -36,7 +36,7 @@ Through a new 3D probability map knowledge distillation technique derived from t
 ## ✨ Key Features
 
 <div align="center">
-  <img src="./public/fastnnunet-arch.png" alt="FastnnUNet Logo" width="800">
+  <img src="./docs/assets/fastnnunet-arch.png" alt="FastnnUNet Logo" width="800">
 </div>
 
 - **Based on nnUNetv2**: Inherits nnUNetv2's powerful adaptive architecture and excellent segmentation performance
@@ -50,15 +50,15 @@ Through a new 3D probability map knowledge distillation technique derived from t
 
 ### 1. Knowledge Distillation Module
 
-Used for knowledge transfer from standard nnUNet models (teacher models) to lightweight models (student models). For detailed information, please refer to the [Distillation Module Documentation](./distillation/README.md).
+Used for knowledge transfer from standard nnUNet models (teacher models) to lightweight models (student models). For detailed information, please refer to the [Distillation Module Documentation](./docs/Distillation.md).
 
 ### 2. Fast Inference Module
 
-Performs efficient inference based on distilled lightweight models, significantly improving performance while maintaining accuracy. For detailed information, please refer to the [Inference Module Documentation](./inference/README.md).
+Performs efficient inference based on distilled lightweight models, significantly improving performance while maintaining accuracy. For detailed information, please refer to the [Inference Module Documentation](./docs/Inference.md).
 
 ### 3. C++ Engine Module
 
-A high-performance C++ implementation of FastnnUNet built on CUDA operators and TensorRT for production-level deployment. This engine enables ultra-fast inference (seconds) for CT and MRI images in clinical settings. For detailed information, please refer to the [C++ Engine Documentation](./engine/README.md).
+A high-performance C++ implementation of FastnnUNet built on CUDA operators and TensorRT for production-level deployment. This engine enables ultra-fast inference (seconds) for CT and MRI images in clinical settings. For detailed information, please refer to the [C++ Engine Documentation](./docs/Engine.md).
 
 ## 🚀 Notifications
 
@@ -68,7 +68,7 @@ A high-performance C++ implementation of FastnnUNet built on CUDA operators and 
 
 **Software Demo:**
 
-![Fast-nnUNet Demo](./public/fast_nnunet_demo.gif)
+![Fast-nnUNet Demo](./docs/assets/fast_nnunet_demo.gif)
 
 *This demo video uses the fast_nnunet_turbo abdominal model for demonstration, with the test region being the abdomen.*
 

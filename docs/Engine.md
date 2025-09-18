@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="../public/fastnnunet-logo.png" alt="FastnnUNet Logo" width="600">
+  <img src="../docs/assets/fastnnunet-logo.png" alt="FastnnUNet Logo" width="600">
 </div>
 
 # ⚙️ FastnnUNet C++ Engine
