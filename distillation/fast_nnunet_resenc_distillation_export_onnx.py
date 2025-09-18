@@ -41,12 +41,12 @@ nnunet_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, nnunet_dir)
 
 # Import paths from nnunetv2
-from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
+from distillation.nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 
 # Import nnUNetDistillationTrainer directly
-from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, LiteNNUNetStudent
-from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
-from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+from distillation.nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, LiteNNUNetStudent
+from distillation.nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
+from distillation.nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
 def get_dataset_name_from_id(dataset_id):
     """Get the complete dataset name from dataset ID"""

@@ -10,17 +10,17 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'nnUNetv2_distillation_train=fast_nnunet_distillation_train:main',
-            'nnUNetv2_resenc_distillation_train=fast_nnunet_resenc_distillation_train:main',
-            'nnUNetv2_distillation_export_onnx=fast_nnunet_distillation_export_onnx:main',
-            'nnUNetv2_resenc_distillation_export_onnx=fast_nnunet_resenc_distillation_export_onnx:main',
+            'nnUNetv2_distillation_train=distillation.fast_nnunet_distillation_train:main',
+            'nnUNetv2_resenc_distillation_train=distillation.fast_nnunet_resenc_distillation_train:main',
+            'nnUNetv2_distillation_export_onnx=distillation.fast_nnunet_distillation_export_onnx:main',
+            'nnUNetv2_resenc_distillation_export_onnx=distillation.fast_nnunet_resenc_distillation_export_onnx:main',
         ],
     },
     py_modules=[
-        'fast_nnunet_distillation_train',
-        'fast_nnunet_resenc_distillation_train',
-        'fast_nnunet_distillation_export_onnx',
-        'fast_nnunet_resenc_distillation_export_onnx'
+        'distillation.fast_nnunet_distillation_train',
+        'distillation.fast_nnunet_resenc_distillation_train',
+        'distillation.fast_nnunet_distillation_export_onnx',
+        'distillation.fast_nnunet_resenc_distillation_export_onnx'
     ],
     python_requires='>=3.7',
     author="Justin",
