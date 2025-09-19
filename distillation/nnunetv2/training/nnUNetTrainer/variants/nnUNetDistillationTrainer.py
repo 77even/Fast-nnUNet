@@ -340,7 +340,7 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
                     self.device = torch.device(type='cuda', index=0)
                 print(f"Using device: {self.device}")
 
-            self.init_kwargs = {
+            self.my_init_kwargs = {
                 'plans': plans,
                 'configuration': configuration,
                 'fold': fold,
@@ -435,7 +435,7 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             
             super().__init__(plans, configuration, fold, dataset_json, device)
             
-            self.init_kwargs.update({
+            self.my_init_kwargs.update({
                 'teacher_model_folder': teacher_model_folder,
                 'teacher_fold': teacher_fold,
                 'teacher_checkpoint_name': teacher_checkpoint_name,
@@ -995,7 +995,7 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             checkpoint = filename_or_checkpoint
 
         # Restore training state from checkpoint
-        self.init_kwargs = checkpoint['init_args']
+        self.my_init_kwargs = checkpoint['init_args']
         self.current_epoch = checkpoint['current_epoch']
         self.logger.load_checkpoint(checkpoint['logging'])
         self._best_ema = checkpoint['_best_ema']
