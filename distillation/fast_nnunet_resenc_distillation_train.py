@@ -70,6 +70,7 @@ def run_resenc_distillation_training(dataset_id,
                                    alpha=0.3,
                                    temperature=3.0,
                                    feature_reduction_factor=2,
+                                   block_reduction_strategy='keep',
                                    continue_training=False,
                                    val_with_mirroring=True,
                                    rotate_training_folds=False,
@@ -91,6 +92,7 @@ def run_resenc_distillation_training(dataset_id,
         alpha: Distillation loss weight
         temperature: Distillation temperature
         feature_reduction_factor: Feature reduction factor
+        block_reduction_strategy: Block reduction strategy ('reduce', 'keep', 'increase', 'adaptive')
         continue_training: Whether to continue previous training
         val_with_mirroring: Whether to use mirroring during validation
         rotate_training_folds: Whether to rotate training folds during training
@@ -172,6 +174,7 @@ def run_resenc_distillation_training(dataset_id,
         alpha=alpha,
         temperature=temperature,
         feature_reduction_factor=feature_reduction_factor,
+        block_reduction_strategy=block_reduction_strategy,
         rotate_training_folds=rotate_training_folds,
         rotate_folds_frequency=rotate_folds_frequency,
         device=device
@@ -193,6 +196,7 @@ def run_resenc_distillation_training(dataset_id,
     print(f"Distillation loss weight alpha: {alpha}")
     print(f"Distillation temperature: {temperature}")
     print(f"Feature reduction factor: {feature_reduction_factor}")
+    print(f"Block reduction strategy: {block_reduction_strategy}")
     print(f"Continue training: {continue_training}")
     print(f"Validation with mirroring: {val_with_mirroring}")
     print(f"Rotate training folds: {rotate_training_folds}")
@@ -258,6 +262,9 @@ def main():
     parser.add_argument('-a', '--alpha', type=float, default=0.3, help='Distillation loss weight (default: 0.3)')
     parser.add_argument('-temp', '--temperature', type=float, default=3.0, help='Distillation temperature (default: 3.0)')
     parser.add_argument('-r', '--reduction_factor', type=int, default=2, help='Feature reduction factor (default: 2)')
+    parser.add_argument('-bs', '--block_strategy', type=str, default='keep', 
+                       choices=['reduce', 'keep', 'increase', 'adaptive'],
+                       help='Block reduction strategy: reduce (A), keep (B), increase (B+), adaptive (B++) (default: keep)')
     parser.add_argument('-d_device', '--device', type=str, help='Device to use, e.g., "cuda:0"')
     parser.add_argument('-c_continue', '--continue_training', action='store_true', help='Whether to continue previous training')
     parser.add_argument('-disable_mirroring', '--disable_val_mirroring', action='store_true', help='Disable mirroring during validation')
@@ -283,6 +290,7 @@ def main():
         alpha=args.alpha,
         temperature=args.temperature,
         feature_reduction_factor=args.reduction_factor,
+        block_reduction_strategy=args.block_strategy,
         continue_training=args.continue_training,
         val_with_mirroring=not args.disable_val_mirroring,
         rotate_training_folds=args.rotate_training_folds,

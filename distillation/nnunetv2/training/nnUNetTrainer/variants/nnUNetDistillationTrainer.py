@@ -24,8 +24,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import GradScaler
 from torch.nn import Conv3d, InstanceNorm3d, LeakyReLU, ConvTranspose3d
+from torch import GradScaler
 from collections import OrderedDict
 import numpy as np
 import os
@@ -299,6 +299,7 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
                  alpha=0.3,
                  temperature=3.0,
                  feature_reduction_factor=2,
+                 block_reduction_strategy='keep',
                  rotate_training_folds=False,
                  rotate_folds_frequency=5,
                  device=torch.device('cuda')):
@@ -313,6 +314,11 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             alpha: Distillation loss weight
             temperature: Distillation temperature
             feature_reduction_factor: Feature channel reduction factor (2 means channel number halved)
+            block_reduction_strategy: Strategy for residual blocks compression
+                - 'reduce': Reduce blocks by half (original strategy A)
+                - 'keep': Keep original blocks (strategy B) 
+                - 'increase': Increase blocks by 1 per stage (strategy B+)
+                - 'adaptive': Adaptive increase based on compression ratio (strategy B++)
             rotate_training_folds: Whether to rotate training folds during training
             rotate_folds_frequency: How often to rotate folds (in epochs)
             device: Compute device
@@ -421,6 +427,7 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             self.alpha = alpha
             self.temperature = temperature
             self.feature_reduction_factor = feature_reduction_factor
+            self.block_reduction_strategy = block_reduction_strategy
             self.rotate_training_folds = rotate_training_folds
             self.rotate_folds_frequency = rotate_folds_frequency
             self.initial_fold = fold
@@ -437,6 +444,7 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
                 'alpha': alpha,
                 'temperature': temperature,
                 'feature_reduction_factor': feature_reduction_factor,
+                'block_reduction_strategy': block_reduction_strategy,
                 'rotate_training_folds': rotate_training_folds,
                 'rotate_folds_frequency': rotate_folds_frequency
             })
@@ -672,12 +680,35 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
         
         # Create lightweight student model based on architecture type
         if is_resenc_student:
-            # For ResEnc student, also reduce n_blocks_per_stage if available
+            # For ResEnc student, apply different block reduction strategies
             n_blocks_per_stage = plan_arch.get("n_blocks_per_stage", [1, 3, 4, 6, 6, 6][:plan_arch["n_stages"]])
-            # Reduce blocks per stage (but keep at least 1 block per stage)
-            lite_n_blocks_per_stage = [max(n // 2, 1) for n in n_blocks_per_stage]
+            
+            # Apply different strategies based on block_reduction_strategy parameter
+            if self.block_reduction_strategy == 'reduce':
+                # Strategy A: Reduce blocks by half (original approach)
+                lite_n_blocks_per_stage = [max(n // 2, 1) for n in n_blocks_per_stage]
+                strategy_desc = "reduced by half"
+            elif self.block_reduction_strategy == 'keep':
+                # Strategy B: Keep original blocks
+                lite_n_blocks_per_stage = n_blocks_per_stage.copy()
+                strategy_desc = "kept original"
+            elif self.block_reduction_strategy == 'increase':
+                # Strategy B+: Increase blocks by 1 per stage
+                lite_n_blocks_per_stage = [min(n + 1, 8) for n in n_blocks_per_stage]
+                strategy_desc = "increased by 1 per stage"
+            elif self.block_reduction_strategy == 'adaptive':
+                # Strategy B++: Adaptive increase based on compression ratio
+                compression_ratios = [original/reduced for original, reduced in zip(plan_arch['features_per_stage'], lite_features_per_stage)]
+                lite_n_blocks_per_stage = [min(n + max(0, int(ratio/4)), 8) for n, ratio in zip(n_blocks_per_stage, compression_ratios)]
+                strategy_desc = "adaptively increased based on compression ratio"
+            else:
+                # Default: keep original
+                lite_n_blocks_per_stage = n_blocks_per_stage.copy()
+                strategy_desc = "kept original (default)"
+            
             self.print_to_log_file(f"Original blocks per stage: {n_blocks_per_stage}")
-            self.print_to_log_file(f"Reduced blocks per stage: {lite_n_blocks_per_stage}")
+            self.print_to_log_file(f"Student blocks per stage: {lite_n_blocks_per_stage} ({strategy_desc})")
+            self.print_to_log_file(f"Block reduction strategy: {self.block_reduction_strategy}")
             
             network = LiteResEncStudent(
                 input_channels=num_input_channels,
