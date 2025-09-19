@@ -1,0 +1,19 @@
+{
+    "patch_size": [
+        56,
+        160,
+        192
+    ],
+    "target_spacing": [
+        3.0,
+        0.7801485061645508,
+        0.7801485061645508
+    ],
+    "intensity_properties": {
+        "mean": 85.8584976196289,
+        "std": 108.00869750976562,
+        "percentile_00_5": -913.0,
+        "percentile_99_5": 284.0
+    },
+    "model_path": "/path/to/your/model.onnx"
+}
