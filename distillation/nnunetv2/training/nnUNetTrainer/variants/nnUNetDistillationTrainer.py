@@ -24,6 +24,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import GradScaler
 from torch.nn import Conv3d, InstanceNorm3d, LeakyReLU, ConvTranspose3d
 from collections import OrderedDict
 import numpy as np
@@ -396,10 +397,9 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
 
             self.was_initialized = False
 
-            self.grad_scaler = None
+            self.grad_scaler = GradScaler("cuda") if device.type == 'cuda' else None
             self.network = None
-            self.optimizer = None
-            self.lr_scheduler = None
+            self.optimizer = self.lr_scheduler = None  # -> self.initialize
             self.loss = None
 
             timestamp = datetime.now()
