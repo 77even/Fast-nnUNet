@@ -275,23 +275,18 @@ class LiteResEncStudent(nn.Module):
 # Distillation loss
 def distillation_loss_fn(student_logits, teacher_logits, temperature):
     """Calculate KL divergence distillation loss"""
-    # Ensure inputs are of the same data type (float32)
+
     student_logits = student_logits.to(torch.float32)
     teacher_logits = teacher_logits.to(torch.float32)
     
-    # Divide logits by temperature
     soft_teacher_logits = teacher_logits.detach() / temperature
     soft_student_logits = student_logits / temperature
 
-    # Teacher model uses softmax to get probability distribution
     teacher_probs = F.softmax(soft_teacher_logits, dim=1)
-    # Student model uses log_softmax
     log_student_probs = F.log_softmax(soft_student_logits, dim=1)
 
-    # Calculate KL divergence, using the correct direction: log_student against teacher_probs
     loss = F.kl_div(log_student_probs, teacher_probs, reduction='mean', log_target=False)
     
-    # According to the paper, multiply by the square of temperature to keep gradient size constant
     scaled_loss = loss * (temperature ** 2)
         
     return scaled_loss
