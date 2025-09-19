@@ -119,10 +119,8 @@ Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021
 
 ## 📄 License
 
-**Open Source Components**: The distillation module in this repository is licensed under the [Apache License 2.0](LICENSE.txt) for non-commercial use only.
+The distillation module in this repository is licensed under the [Apache License 2.0](LICENSE.txt) for non-commercial use only.
 
-**Patent-Protected Components**: The Fast Inference Module and C++ Engine Module are protected by patents (CN202510788224) and remain proprietary. These components are not included in the Apache License scope and require separate commercial licensing.
+The Fast Inference Module and C++ Engine Module are protected by patents (CN202510788224) and remain proprietary. These components are not included in the Apache License scope and require separate commercial licensing.
 
-**Non-Commercial Use**: The open-source distillation module may be used freely for research, academic study, educational purposes.
-
-**Commercial Use**: For any commercial applications, business use, or access to proprietary components, please contact **Xiaozhi Future (Chengdu, China) Inc** for proper licensing arrangements.
+The open-source distillation module may be used freely for research, academic study, educational purposes. For any commercial applications, business use, or access to proprietary components, please contact **Xiaozhi Future (Chengdu, China) Inc** for proper licensing arrangements.
