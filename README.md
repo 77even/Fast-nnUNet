@@ -8,7 +8,9 @@ FastnnUNet is a high-performance medical image segmentation framework based on t
 
 > ⚠️ **Important Note**: The full FastnnUNet includes a C++ version of the FastnnUNet code, but it is not available for this repository at this time, even though the stable version that has been engineered and tested has no problems.
 > 
-> 🔍 **Current Release Status**: Currently only the code about the distillation module is released, the code for the other modules is temporarily unavailable due to the needs of the current ongoing project. Developers using FastnnUNet are welcome to implement the remaining two modules on their own, which is full of challenges. Of course, feel free to use the distillation module to implement FastnnUNet models for training and testing against benchmark nnUNet models.
+> 🔍 **Current Release Status**: Only the distillation module is currently open-sourced under Apache License 2.0. The Fast Inference Module and C++ Engine Module are protected by patents and require separate commercial licensing. Developers are welcome to use the distillation module for non-commercial research, academic study, and educational purposes.
+>
+> <h3>❗❗ <strong>Legal Notice</strong>: The remaining modules are protected by patents and are not included within the scope of the Apache License. If you are interested or need commercial cooperation, please contact Xiaozhi Future (Chengdu, China) Inc. The current open-source release is limited to the distillation module, while other components remain under proprietary patent protection.</h3>
 >
 > 🚀 **Update Date**: April 25, 2025
 >
@@ -16,11 +18,8 @@ FastnnUNet is a high-performance medical image segmentation framework based on t
 
 > 🚀 **News**: The fast_nnunet_bone_turbo model and software demo for Fast-nnUNet are now available.
 > 
-> 🚀 **Coming Soon**: The remaining modules will be released successively in the future, stay tuned!
-> 
 > ⭐ If it is helpful to your study research, please feel free to add FastnnUNet's star mark! Of course, if you encounter any related problems or deficiencies, please contact us, and continuous improvement is our greatest original intention! ^-^
 > 
-> <h3>❗❗ <strong>Attention</strong>: No commercial use is allowed</h3>
 
 ## Introduction
 
@@ -120,4 +119,10 @@ Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021
 
 ## 📄 License
 
-This repository is licensed under the [Apache License 2.0](LICENSE.txt).
+**Open Source Components**: The distillation module in this repository is licensed under the [Apache License 2.0](LICENSE.txt) for non-commercial use only.
+
+**Patent-Protected Components**: The Fast Inference Module and C++ Engine Module are protected by patents (CN202510788224) and remain proprietary. These components are not included in the Apache License scope and require separate commercial licensing.
+
+**Non-Commercial Use**: The open-source distillation module may be used freely for research, academic study, educational purposes.
+
+**Commercial Use**: For any commercial applications, business use, or access to proprietary components, please contact **Xiaozhi Future (Chengdu, China) Inc** for proper licensing arrangements.
