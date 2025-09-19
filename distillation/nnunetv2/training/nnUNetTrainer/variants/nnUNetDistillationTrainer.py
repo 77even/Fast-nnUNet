@@ -31,6 +31,7 @@ import os
 import json
 from typing import Union, List, Tuple
 from torch import distributed as dist
+from torch.cuda import device_count
 from time import time
 from batchgenerators.utilities.file_and_folder_operations import *
 from torch._dynamo import OptimizedModule
@@ -38,6 +39,12 @@ from torch._dynamo import OptimizedModule
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 from nnunetv2.utilities.helpers import empty_cache
+from nnunetv2.paths import nnUNet_preprocessed, nnUNet_results
+from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
+from nnunetv2.training.logging.nnunet_logger import nnUNetLogger
+from datetime import datetime
+from time import sleep
+import sys
 try:
     from torch.amp import autocast  # Recommended modern import method
 except ImportError:
@@ -58,6 +65,7 @@ from nnunetv2.training.loss.dice import get_tp_fp_fn_tn
 # Use generic components from dynamic network architecture library
 from dynamic_network_architectures.building_blocks.plain_conv_encoder import PlainConvEncoder
 from dynamic_network_architectures.building_blocks.unet_decoder import UNetDecoder
+from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
 from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
 
 # Lightweight nnU-Net student model consistent with the original nnUNet architecture
@@ -166,6 +174,103 @@ class LiteNNUNetStudent(nn.Module):
         skips = self.encoder(x)
         return self.decoder(skips)
 
+# Lightweight ResEnc student model based on ResidualEncoderUNet architecture
+class LiteResEncStudent(nn.Module):
+    """
+    Based on the ResidualEncoderUNet architecture but with reduced feature channels and blocks
+    """
+    def __init__(self,
+                 input_channels: int,
+                 num_classes: int,
+                 n_stages: int = 6,
+                 features_per_stage: list = None,
+                 conv_op: type = Conv3d,
+                 kernel_sizes: Union[int, list] = 3,
+                 strides: list = None,
+                 n_blocks_per_stage: list = None,
+                 n_conv_per_stage_decoder: list = None,
+                 conv_bias: bool = True,
+                 norm_op: type = InstanceNorm3d,
+                 norm_op_kwargs: dict = None,
+                 dropout_op: type = None,
+                 dropout_op_kwargs: dict = None,
+                 nonlin: type = LeakyReLU,
+                 nonlin_kwargs: dict = None,
+                 deep_supervision: bool = True
+                 ):
+        super().__init__()
+        
+        # Parameter settings
+        if norm_op_kwargs is None:
+            norm_op_kwargs = {'eps': 1e-5, 'affine': True}
+        if nonlin_kwargs is None:
+            nonlin_kwargs = {'inplace': True}
+        if features_per_stage is None:
+            features_per_stage = [32, 64, 128, 256, 320, 320]
+        if isinstance(kernel_sizes, int):
+            kernel_sizes = [kernel_sizes] * n_stages
+        if n_blocks_per_stage is None:
+            # Reduced from ResEnc's (1, 3, 4, 6, 6, 6) to lighter version
+            n_blocks_per_stage = [1, 2, 2, 3, 3, 3][:n_stages]
+        if n_conv_per_stage_decoder is None:
+            n_conv_per_stage_decoder = [1] * (n_stages - 1)
+        if strides is None:
+            strides = [(1, 1, 1)] + [(2, 2, 2)] * (n_stages - 1)
+            
+        # Check if parameter lengths match
+        if not (len(features_per_stage) == n_stages and len(kernel_sizes) == n_stages and 
+                len(strides) == n_stages and len(n_blocks_per_stage) == n_stages):
+            raise ValueError("Parameter list lengths do not match n_stages")
+        if len(n_conv_per_stage_decoder) != (n_stages - 1):
+            raise ValueError("Decoder convolution list length should be n_stages - 1")
+            
+        # Save initialization parameters
+        self.input_channels = input_channels
+        self.num_classes = num_classes
+        self.n_stages = n_stages
+        self.features_per_stage = features_per_stage
+        self.kernel_sizes = kernel_sizes
+        self.strides = strides
+        self.n_blocks_per_stage = n_blocks_per_stage
+        self.n_conv_per_stage_decoder = n_conv_per_stage_decoder
+        self.conv_bias = conv_bias
+        self.norm_op = norm_op
+        self.norm_op_kwargs = norm_op_kwargs
+        self.dropout_op = dropout_op
+        self.dropout_op_kwargs = dropout_op_kwargs
+        self.nonlin = nonlin
+        self.nonlin_kwargs = nonlin_kwargs
+        self.deep_supervision = deep_supervision
+        
+        # Use ResidualEncoderUNet directly but with reduced parameters
+        self.network = ResidualEncoderUNet(
+            input_channels=input_channels,
+            n_stages=n_stages,
+            features_per_stage=features_per_stage,
+            conv_op=conv_op,
+            kernel_sizes=kernel_sizes,
+            strides=strides,
+            n_blocks_per_stage=n_blocks_per_stage,
+            num_classes=num_classes,
+            n_conv_per_stage_decoder=n_conv_per_stage_decoder,
+            conv_bias=conv_bias,
+            norm_op=norm_op,
+            norm_op_kwargs=norm_op_kwargs,
+            dropout_op=dropout_op,
+            dropout_op_kwargs=dropout_op_kwargs,
+            nonlin=nonlin,
+            nonlin_kwargs=nonlin_kwargs,
+            deep_supervision=deep_supervision
+        )
+
+    def forward(self, x):
+        return self.network(x)
+    
+    @property
+    def decoder(self):
+        """Provide access to decoder for compatibility with parent class"""
+        return self.network.decoder
+
 # Distillation loss
 def distillation_loss_fn(student_logits, teacher_logits, temperature):
     """Calculate KL divergence distillation loss"""
@@ -216,27 +321,134 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             rotate_folds_frequency: How often to rotate folds (in epochs)
             device: Compute device
         """
-        # Ensure was_initialized is set to False before initialization
-        self.was_initialized = False
+        import inspect
+        original_init = nnUNetTrainer.__init__
         
-        super().__init__(plans, configuration, fold, dataset_json, device)
+        def patched_init(self, plans, configuration, fold, dataset_json, device):
+
+            self.is_ddp = dist.is_available() and dist.is_initialized()
+            self.local_rank = 0 if not self.is_ddp else dist.get_rank()
+            self.device = device
+
+            if self.is_ddp:
+                print(f"I am local rank {self.local_rank}. {device_count()} GPUs are available. The world size is "
+                      f"{dist.get_world_size()}."
+                      f"Setting device to {self.device}")
+                self.device = torch.device(type='cuda', index=self.local_rank)
+            else:
+                if self.device.type == 'cuda':
+                    self.device = torch.device(type='cuda', index=0)
+                print(f"Using device: {self.device}")
+
+            self.init_kwargs = {
+                'plans': plans,
+                'configuration': configuration,
+                'fold': fold,
+                'dataset_json': dataset_json,
+                'device': device
+            }
+            
+            self.plans_manager = PlansManager(plans)
+            self.configuration_manager = self.plans_manager.get_configuration(configuration)
+            self.configuration_name = configuration
+            self.dataset_json = dataset_json
+            self.fold = fold
+
+            self.label_manager = self.plans_manager.get_label_manager(dataset_json)
+
+            self.preprocessed_dataset_folder_base = join(nnUNet_preprocessed, self.plans_manager.dataset_name) \
+                if nnUNet_preprocessed is not None else None
+            self.output_folder_base = join(nnUNet_results, self.plans_manager.dataset_name,
+                                           self.__class__.__name__ + '__' + self.plans_manager.plans_name + "__" + configuration) \
+                if nnUNet_results is not None else None
+            self.output_folder = join(self.output_folder_base, f'fold_{fold}')
+
+            self.preprocessed_dataset_folder = join(self.preprocessed_dataset_folder_base,
+                                                    self.configuration_manager.data_identifier)
+            self.dataset_class = None
+            self.is_cascaded = self.configuration_manager.previous_stage_name is not None
+            self.folder_with_segs_from_previous_stage = \
+                join(nnUNet_results, self.plans_manager.dataset_name,
+                     self.__class__.__name__ + '__' + self.plans_manager.plans_name + "__" +
+                     self.configuration_manager.previous_stage_name, 'predicted_next_stage', self.configuration_name) \
+                    if self.is_cascaded else None
+
+            self.initial_lr = 1e-2
+            self.weight_decay = 3e-5
+            self.oversample_foreground_percent = 0.33
+            self.probabilistic_oversampling = False
+            self.num_iterations_per_epoch = 250
+            self.num_val_iterations_per_epoch = 50
+            self.num_epochs = 1000
+            self.current_epoch = 0
+
+            self.enable_deep_supervision = True
+            self.allow_val_padding = True
+
+            self.dataloader_train = self.dataloader_val = None
+
+            self._best_ema = None
+
+            self.inference_allowed_mirroring_axes = None
+
+            self.save_every = 50
+            self.disable_checkpointing = False
+
+            self.was_initialized = False
+
+            self.grad_scaler = None
+            self.network = None
+            self.optimizer = None
+            self.lr_scheduler = None
+            self.loss = None
+
+            timestamp = datetime.now()
+            maybe_mkdir_p(self.output_folder)
+            self.log_file = join(self.output_folder, "training_log_%d_%d_%d_%02.0d_%02.0d_%02.0d.txt" %
+                                 (timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute,
+                                  timestamp.second))
+            self.logger = nnUNetLogger()
+
+            self.print_to_log_file("\n#######################################################################\n"
+                                   "Please cite the following paper when using nnU-Net:\n"
+                                   "Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021). "
+                                   "nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation. "
+                                   "Nature methods, 18(2), 203-211.\n"
+                                   "#######################################################################\n",
+                                   also_print_to_console=True, add_timestamp=False)
         
-        # Save distillation parameters
-        self.teacher_model_folder = teacher_model_folder
-        self.teacher_fold = teacher_fold if isinstance(teacher_fold, (list, tuple)) else [teacher_fold]
-        self.teacher_checkpoint_name = teacher_checkpoint_name
-        self.alpha = alpha
-        self.temperature = temperature
-        self.feature_reduction_factor = feature_reduction_factor
+        nnUNetTrainer.__init__ = patched_init
         
-        # Fold rotation parameters
-        self.rotate_training_folds = rotate_training_folds
-        self.rotate_folds_frequency = rotate_folds_frequency
-        self.initial_fold = fold  # Save the initial fold
-        self.all_available_folds = None  # Will be set in initialize_fold_rotation if needed
-        self.fold_rotation_counter = 0  # Counter for fold rotations
+        try:
+            self.teacher_model_folder = teacher_model_folder
+            self.teacher_fold = teacher_fold if isinstance(teacher_fold, (list, tuple)) else [teacher_fold]
+            self.teacher_checkpoint_name = teacher_checkpoint_name
+            self.alpha = alpha
+            self.temperature = temperature
+            self.feature_reduction_factor = feature_reduction_factor
+            self.rotate_training_folds = rotate_training_folds
+            self.rotate_folds_frequency = rotate_folds_frequency
+            self.initial_fold = fold
+            self.all_available_folds = None
+            self.fold_rotation_counter = 0
+            self.student_plans_identifier = 'nnUNetPlans'  # Default
+            
+            super().__init__(plans, configuration, fold, dataset_json, device)
+            
+            self.init_kwargs.update({
+                'teacher_model_folder': teacher_model_folder,
+                'teacher_fold': teacher_fold,
+                'teacher_checkpoint_name': teacher_checkpoint_name,
+                'alpha': alpha,
+                'temperature': temperature,
+                'feature_reduction_factor': feature_reduction_factor,
+                'rotate_training_folds': rotate_training_folds,
+                'rotate_folds_frequency': rotate_folds_frequency
+            })
+            
+        finally:
+            nnUNetTrainer.__init__ = original_init
         
-        # These variables will be set in initialize
         self.teacher_models = []
 
     def initialize_fold_rotation(self):
@@ -394,7 +606,14 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
                                  num_output_channels: int = None,  # Can be used, but can also be obtained from plans
                                  enable_deep_supervision: bool = True):  # Default enable deep supervision
         """Rewrite network architecture building method, create lightweight student model, compatible with parent class parameter list"""
-        self.print_to_log_file("Building lightweight student model...")
+        
+        # Determine student model type based on student_plans_identifier
+        is_resenc_student = 'ResEnc' in getattr(self, 'student_plans_identifier', 'nnUNetPlans')
+        
+        if is_resenc_student:
+            self.print_to_log_file("Building lightweight ResEnc student model...")
+        else:
+            self.print_to_log_file("Building lightweight standard UNet student model...")
         
         # If input/output channel numbers are not provided, obtain them from plans
         if num_input_channels is None:
@@ -456,24 +675,51 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
         self.print_to_log_file(f"Original feature number: {plan_arch['features_per_stage']}")
         self.print_to_log_file(f"Reduced feature number: {lite_features_per_stage}")
         
-        # Create lightweight student model
-        network = LiteNNUNetStudent(
-            input_channels=num_input_channels,
-            num_classes=num_output_channels,
-            n_stages=plan_arch["n_stages"],
-            features_per_stage=lite_features_per_stage,
-            conv_op=Conv3d,
-            kernel_sizes=[tuple(ks) if not isinstance(ks[0], (list, tuple)) else tuple(ks[0]) for ks in plan_arch["kernel_sizes"]],
-            strides=[tuple(st) for st in plan_arch["strides"]],
-            n_conv_per_stage=plan_arch["n_conv_per_stage"],
-            n_conv_per_stage_decoder=plan_arch["n_conv_per_stage_decoder"],
-            conv_bias=plan_arch["conv_bias"],
-            norm_op=InstanceNorm3d,
-            norm_op_kwargs=plan_arch["norm_op_kwargs"],
-            nonlin=LeakyReLU,
-            nonlin_kwargs=plan_arch["nonlin_kwargs"],
-            deep_supervision=enable_deep_supervision
-        )
+        # Create lightweight student model based on architecture type
+        if is_resenc_student:
+            # For ResEnc student, also reduce n_blocks_per_stage if available
+            n_blocks_per_stage = plan_arch.get("n_blocks_per_stage", [1, 3, 4, 6, 6, 6][:plan_arch["n_stages"]])
+            # Reduce blocks per stage (but keep at least 1 block per stage)
+            lite_n_blocks_per_stage = [max(n // 2, 1) for n in n_blocks_per_stage]
+            self.print_to_log_file(f"Original blocks per stage: {n_blocks_per_stage}")
+            self.print_to_log_file(f"Reduced blocks per stage: {lite_n_blocks_per_stage}")
+            
+            network = LiteResEncStudent(
+                input_channels=num_input_channels,
+                num_classes=num_output_channels,
+                n_stages=plan_arch["n_stages"],
+                features_per_stage=lite_features_per_stage,
+                conv_op=Conv3d,
+                kernel_sizes=[tuple(ks) if not isinstance(ks[0], (list, tuple)) else tuple(ks[0]) for ks in plan_arch["kernel_sizes"]],
+                strides=[tuple(st) for st in plan_arch["strides"]],
+                n_blocks_per_stage=lite_n_blocks_per_stage,
+                n_conv_per_stage_decoder=plan_arch["n_conv_per_stage_decoder"],
+                conv_bias=plan_arch["conv_bias"],
+                norm_op=InstanceNorm3d,
+                norm_op_kwargs=plan_arch["norm_op_kwargs"],
+                nonlin=LeakyReLU,
+                nonlin_kwargs=plan_arch["nonlin_kwargs"],
+                deep_supervision=enable_deep_supervision
+            )
+        else:
+            # Standard UNet student model
+            network = LiteNNUNetStudent(
+                input_channels=num_input_channels,
+                num_classes=num_output_channels,
+                n_stages=plan_arch["n_stages"],
+                features_per_stage=lite_features_per_stage,
+                conv_op=Conv3d,
+                kernel_sizes=[tuple(ks) if not isinstance(ks[0], (list, tuple)) else tuple(ks[0]) for ks in plan_arch["kernel_sizes"]],
+                strides=[tuple(st) for st in plan_arch["strides"]],
+                n_conv_per_stage=plan_arch["n_conv_per_stage"],
+                n_conv_per_stage_decoder=plan_arch["n_conv_per_stage_decoder"],
+                conv_bias=plan_arch["conv_bias"],
+                norm_op=InstanceNorm3d,
+                norm_op_kwargs=plan_arch["norm_op_kwargs"],
+                nonlin=LeakyReLU,
+                nonlin_kwargs=plan_arch["nonlin_kwargs"],
+                deep_supervision=enable_deep_supervision
+            )
         
         # Whether to compile
         if self._do_i_compile():
@@ -749,7 +995,7 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             checkpoint = filename_or_checkpoint
 
         # Restore training state from checkpoint
-        self.my_init_kwargs = checkpoint['init_args']
+        self.init_kwargs = checkpoint['init_args']
         self.current_epoch = checkpoint['current_epoch']
         self.logger.load_checkpoint(checkpoint['logging'])
         self._best_ema = checkpoint['_best_ema']

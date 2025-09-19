@@ -34,11 +34,11 @@ nnunet_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, nnunet_dir)
 
 # Import paths from nnunetv2
-from distillation.nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
+from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 
 # Import nnUNetDistillationTrainer directly
-from distillation.nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer
-from distillation.nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
+from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer
+from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
 
 def get_dataset_name_from_id(dataset_id):
     """Get the complete dataset name from dataset ID"""
@@ -176,6 +176,9 @@ def run_resenc_distillation_training(dataset_id,
         rotate_folds_frequency=rotate_folds_frequency,
         device=device
     )
+    
+    # Set student model plans identifier for architecture selection
+    trainer.student_plans_identifier = student_plans_identifier
     
     # Output training configuration information
     print(f"\n============ ResEnc Knowledge Distillation Training Configuration ============")

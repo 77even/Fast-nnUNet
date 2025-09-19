@@ -41,12 +41,12 @@ nnunet_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, nnunet_dir)
 
 # Import paths from nnunetv2
-from distillation.nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
+from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 
 # Import nnUNetDistillationTrainer directly
-from distillation.nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, LiteNNUNetStudent
-from distillation.nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
-from distillation.nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, LiteNNUNetStudent, LiteResEncStudent
+from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
+from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
 def get_dataset_name_from_id(dataset_id):
     """Get the complete dataset name from dataset ID"""
@@ -79,7 +79,16 @@ def export_dataset_json(dataset_name, output_dir):
 
 def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configuration, fold, 
                              student_plans_identifier, feature_reduction_factor, device, verbose=False):
-    """Load ResEnc distillation student model from checkpoint"""
+    """Load distillation student model from checkpoint"""
+    
+    # Determine student model type based on student_plans_identifier
+    is_resenc_student = 'ResEnc' in student_plans_identifier
+    
+    if verbose:
+        if is_resenc_student:
+            print("Loading ResEnc student model architecture...")
+        else:
+            print("Loading standard UNet student model architecture...")
     
     # Create trainer instance to get model architecture parameters
     trainer = nnUNetDistillationTrainer(
@@ -91,6 +100,9 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
         feature_reduction_factor=feature_reduction_factor,
         device=device
     )
+    
+    # Set student plans identifier for correct architecture selection
+    trainer.student_plans_identifier = student_plans_identifier
     
     # Get network architecture parameters
     num_input_channels = determine_num_input_channels(trainer.plans_manager, trainer.configuration_manager, dataset_json)
@@ -113,12 +125,14 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
                 features_per_stage = arch_kwargs.get('features_per_stage', [32, 64, 128, 256, 320, 320][:n_stages])
                 strides = arch_kwargs.get('strides', [[1, 1, 1]] + [[2, 2, 2]] * (n_stages - 1))
                 kernel_sizes = arch_kwargs.get('kernel_sizes', [[3, 3, 3]] * n_stages)
+                n_blocks_per_stage = arch_kwargs.get('n_blocks_per_stage', [1, 3, 4, 6, 6, 6][:n_stages])
             else:
                 # Fall back to defaults
                 n_stages = 6
                 features_per_stage = [32, 64, 128, 256, 320, 320][:n_stages]
                 strides = [[1, 1, 1]] + [[2, 2, 2]] * (n_stages - 1)
                 kernel_sizes = [[3, 3, 3]] * n_stages
+                n_blocks_per_stage = [1, 3, 4, 6, 6, 6][:n_stages]
         else:
             # Get from other configuration keys
             if 'pool_op_kernel_sizes' in config:
@@ -126,6 +140,7 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
                 features_per_stage = config.get('features_per_stage', [32, 64, 128, 256, 320, 320][:n_stages])
                 strides = config['pool_op_kernel_sizes']
                 kernel_sizes = config.get('conv_kernel_sizes', [[3, 3, 3]] * n_stages)
+                n_blocks_per_stage = [1, 3, 4, 6, 6, 6][:n_stages]
             else:
                 # Use default values
                 print("Warning: Cannot find complete network architecture configuration in plans, using defaults")
@@ -133,6 +148,7 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
                 features_per_stage = [32, 64, 128, 256, 320, 320][:n_stages]
                 strides = [[1, 1, 1]] + [[2, 2, 2]] * (n_stages - 1)
                 kernel_sizes = [[3, 3, 3]] * n_stages
+                n_blocks_per_stage = [1, 3, 4, 6, 6, 6][:n_stages]
         
         # Apply feature reduction factor
         lite_features_per_stage = [max(f // feature_reduction_factor, 8) for f in features_per_stage]
@@ -141,27 +157,53 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
             print(f"Number of stages: {n_stages}")
             print(f"Original features: {features_per_stage}")
             print(f"Reduced features: {lite_features_per_stage}")
+            if is_resenc_student:
+                lite_n_blocks_per_stage = [max(n // 2, 1) for n in n_blocks_per_stage]
+                print(f"Original blocks per stage: {n_blocks_per_stage}")
+                print(f"Reduced blocks per stage: {lite_n_blocks_per_stage}")
     else:
         raise ValueError(f"Configuration {configuration} does not exist in plans")
     
-    # Create student model
-    model = LiteNNUNetStudent(
-        input_channels=num_input_channels,
-        num_classes=num_output_channels,
-        n_stages=n_stages,
-        features_per_stage=lite_features_per_stage,
-        conv_op=torch.nn.Conv3d,
-        kernel_sizes=[tuple(k) if isinstance(k, list) else k for k in kernel_sizes],
-        strides=[tuple(p) if isinstance(p, list) else p for p in strides],
-        n_conv_per_stage=[2] * n_stages,
-        n_conv_per_stage_decoder=[2] * (n_stages - 1),
-        conv_bias=True,
-        norm_op=torch.nn.InstanceNorm3d,
-        norm_op_kwargs={"eps": 1e-5, "affine": True},
-        nonlin=torch.nn.LeakyReLU,
-        nonlin_kwargs={"inplace": True},
-        deep_supervision=False  # Don't use deep supervision for ONNX export
-    )
+    # Create student model based on architecture type
+    if is_resenc_student:
+        # ResEnc student model
+        lite_n_blocks_per_stage = [max(n // 2, 1) for n in n_blocks_per_stage]
+        model = LiteResEncStudent(
+            input_channels=num_input_channels,
+            num_classes=num_output_channels,
+            n_stages=n_stages,
+            features_per_stage=lite_features_per_stage,
+            conv_op=torch.nn.Conv3d,
+            kernel_sizes=[tuple(k) if isinstance(k, list) else k for k in kernel_sizes],
+            strides=[tuple(p) if isinstance(p, list) else p for p in strides],
+            n_blocks_per_stage=lite_n_blocks_per_stage,
+            n_conv_per_stage_decoder=[1] * (n_stages - 1),
+            conv_bias=True,
+            norm_op=torch.nn.InstanceNorm3d,
+            norm_op_kwargs={"eps": 1e-5, "affine": True},
+            nonlin=torch.nn.LeakyReLU,
+            nonlin_kwargs={"inplace": True},
+            deep_supervision=False  # Don't use deep supervision for ONNX export
+        )
+    else:
+        # Standard UNet student model
+        model = LiteNNUNetStudent(
+            input_channels=num_input_channels,
+            num_classes=num_output_channels,
+            n_stages=n_stages,
+            features_per_stage=lite_features_per_stage,
+            conv_op=torch.nn.Conv3d,
+            kernel_sizes=[tuple(k) if isinstance(k, list) else k for k in kernel_sizes],
+            strides=[tuple(p) if isinstance(p, list) else p for p in strides],
+            n_conv_per_stage=[2] * n_stages,
+            n_conv_per_stage_decoder=[2] * (n_stages - 1),
+            conv_bias=True,
+            norm_op=torch.nn.InstanceNorm3d,
+            norm_op_kwargs={"eps": 1e-5, "affine": True},
+            nonlin=torch.nn.LeakyReLU,
+            nonlin_kwargs={"inplace": True},
+            deep_supervision=False  # Don't use deep supervision for ONNX export
+        )
     
     # Load checkpoint
     try:
@@ -291,12 +333,16 @@ def export_resenc_distillation_to_onnx(dataset_id,
         # Default shape
         input_shape = (1, num_input_channels, 128, 128, 128)
     
+    # Determine model type for filename
+    is_resenc_student = 'ResEnc' in student_plans_identifier
+    model_type = "resenc" if is_resenc_student else "unet"
+    
     # Create dummy input
     if batch_size > 0:
         # Fixed batch size
         dummy_input = torch.zeros((batch_size, num_input_channels, *input_shape[2:]), dtype=torch.float32).to(device)
         dynamic_axes = None
-        onnx_filename = f"resenc_distillation_fold{fold}_batch{batch_size}_r{feature_reduction_factor}.onnx"
+        onnx_filename = f"{model_type}_distillation_fold{fold}_batch{batch_size}_r{feature_reduction_factor}.onnx"
     else:
         # Dynamic batch size
         dummy_input = torch.zeros(input_shape, dtype=torch.float32).to(device)
@@ -304,11 +350,11 @@ def export_resenc_distillation_to_onnx(dataset_id,
             'input': {0: 'batch_size'},
             'output': {0: 'batch_size'}
         }
-        onnx_filename = f"resenc_distillation_fold{fold}_dynamic_r{feature_reduction_factor}.onnx"
+        onnx_filename = f"{model_type}_distillation_fold{fold}_dynamic_r{feature_reduction_factor}.onnx"
     
     output_path = join(output_dir, onnx_filename)
     
-    print(f"Exporting ResEnc distillation model with input shape {dummy_input.shape}")
+    print(f"Exporting {model_type.upper()} distillation model with input shape {dummy_input.shape}")
     
     # Export to ONNX
     try:
@@ -324,7 +370,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
             dynamic_axes=dynamic_axes,   # Dynamic dimensions
             verbose=verbose              # Verbose output
         )
-        print(f"ResEnc distillation model successfully exported to {output_path}")
+        print(f"{model_type.upper()} distillation model successfully exported to {output_path}")
         
         # Export dataset json
         export_dataset_json(dataset_name, output_dir)
@@ -349,7 +395,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
         
         return output_path
     except Exception as e:
-        print(f"Error exporting ResEnc distillation model: {e}")
+        print(f"Error exporting {model_type.upper()} distillation model: {e}")
         raise
 
 def main():
