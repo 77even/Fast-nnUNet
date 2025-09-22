@@ -69,13 +69,138 @@ def get_dataset_name_from_id(dataset_id):
 
 def export_dataset_json(dataset_name, output_dir):
     """Export dataset.json file to output directory"""
+    import shutil
     dataset_json_path = join(nnUNet_raw, dataset_name, "dataset.json")
     if isfile(dataset_json_path):
         output_json_path = join(output_dir, "dataset.json")
-        copy_file(dataset_json_path, output_json_path)
+        shutil.copy2(dataset_json_path, output_json_path)
         print(f"Dataset json file exported to: {output_json_path}")
     else:
         print(f"Warning: Dataset json file not found: {dataset_json_path}")
+
+def fix_instance_norm_for_trt(input_onnx_path, output_onnx_path=None, verbose=False):
+    """
+    Fix InstanceNormalization nodes in ONNX model for TensorRT compatibility
+    
+    Parameters:
+        input_onnx_path: Path to input ONNX model
+        output_onnx_path: Path to output ONNX model, if None will overwrite original file
+        verbose: Whether to show detailed information
+    
+    Returns:
+        bool: Whether any fixes were applied
+    """
+    if verbose:
+        print(f"🔧 Fixing ONNX model for TensorRT compatibility: {input_onnx_path}")
+    
+    try:
+        import onnx
+        import numpy as np
+    except ImportError as e:
+        print(f"Warning: Cannot import required packages for TensorRT fix: {e}")
+        return False
+    
+    if output_onnx_path is None:
+        output_onnx_path = input_onnx_path
+    
+    # Load ONNX model
+    model = onnx.load(input_onnx_path)
+    graph = model.graph
+    
+    # Collect all initializers (weights)
+    initializers = {init.name: init for init in graph.initializer}
+    
+    # Find and fix InstanceNormalization nodes
+    instance_norm_count = 0
+    fixed_count = 0
+    
+    for node in graph.node:
+        if node.op_type == "InstanceNormalization":
+            instance_norm_count += 1
+            if verbose:
+                print(f"  Processing node: {node.name}")
+            
+            # InstanceNormalization node should have 3 inputs: input, scale, bias
+            if len(node.input) >= 3:
+                input_name = node.input[0]
+                scale_name = node.input[1]
+                bias_name = node.input[2]
+                
+                if verbose:
+                    print(f"    Input: {input_name}")
+                    print(f"    Scale: {scale_name}")
+                    print(f"    Bias: {bias_name}")
+                
+                # Check if scale and bias are in initializers
+                scale_is_initializer = scale_name in initializers
+                bias_is_initializer = bias_name in initializers
+                
+                if verbose:
+                    print(f"    Scale is initializer: {scale_is_initializer}")
+                    print(f"    Bias is initializer: {bias_is_initializer}")
+                
+                # If bias is not an initializer, we need to convert it to an initializer
+                if not bias_is_initializer:
+                    if verbose:
+                        print(f"    ⚠️  Bias is not initializer, needs fixing")
+                    
+                    # If scale is an initializer, we can infer bias shape from it
+                    if scale_is_initializer:
+                        scale_tensor = initializers[scale_name]
+                        bias_shape = list(scale_tensor.dims)
+                        
+                        # Create zero bias initializer
+                        bias_data = np.zeros(bias_shape, dtype=np.float32)
+                        bias_initializer = onnx.helper.make_tensor(
+                            name=bias_name + "_fixed",
+                            data_type=onnx.TensorProto.FLOAT,
+                            dims=bias_shape,
+                            vals=bias_data.flatten().tolist()
+                        )
+                        
+                        # Add to initializer list
+                        graph.initializer.append(bias_initializer)
+                        
+                        # Update node input
+                        node.input[2] = bias_name + "_fixed"
+                        
+                        if verbose:
+                            print(f"    ✅ Created fixed bias initializer: {bias_name}_fixed")
+                        fixed_count += 1
+                    else:
+                        if verbose:
+                            print(f"    ❌ Cannot fix: scale is also not an initializer")
+                else:
+                    if verbose:
+                        print(f"    ✅ Bias is already initializer, no fix needed")
+            else:
+                if verbose:
+                    print(f"    ❌ InstanceNormalization node has less than 3 inputs")
+    
+    if verbose:
+        print(f"\n📊 Fix Statistics:")
+        print(f"  Found InstanceNormalization nodes: {instance_norm_count}")
+        print(f"  Successfully fixed nodes: {fixed_count}")
+    
+    # Save fixed model
+    if fixed_count > 0 or output_onnx_path != input_onnx_path:
+        onnx.save(model, output_onnx_path)
+        if verbose:
+            print(f"✅ Fixed model saved to: {output_onnx_path}")
+    
+    # Validate fixed model
+    if verbose:
+        print("🔍 Validating fixed model...")
+    try:
+        onnx.checker.check_model(model)
+        if verbose:
+            print("✅ Model validation passed")
+    except Exception as e:
+        if verbose:
+            print(f"❌ Model validation failed: {e}")
+        return False
+    
+    return fixed_count > 0
 
 def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configuration, fold, 
                              student_plans_identifier, feature_reduction_factor, device, verbose=False):
@@ -264,6 +389,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
                                      plans_identifier='nnUNetPlans',
                                      student_plans_identifier='nnUNetPlans',
                                      feature_reduction_factor=2,
+                                     trt_compatible=False,
                                      verbose=False):
     """
     Export ResEnc distillation model to ONNX format
@@ -278,6 +404,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
         plans_identifier: Plans identifier
         student_plans_identifier: Student plans identifier
         feature_reduction_factor: Feature reduction factor
+        trt_compatible: Apply TensorRT compatibility fixes
         verbose: Show detailed output
     """
     # Parse dataset ID to full name
@@ -393,6 +520,27 @@ def export_resenc_distillation_to_onnx(dataset_id,
             print("Note: onnx or onnxsim not installed, skipping model simplification step")
             print("Tip: Use 'pip install onnx onnxsim' to install required libraries")
         
+        # Apply TensorRT compatibility fixes if requested
+        if trt_compatible:
+            print("Applying TensorRT compatibility fixes...")
+            try:
+                # Create TRT-compatible version with suffix
+                trt_output_path = output_path.replace('.onnx', '_trt.onnx')
+                fixed = fix_instance_norm_for_trt(output_path, trt_output_path, verbose)
+                if fixed:
+                    print(f"TensorRT-compatible model saved to: {trt_output_path}")
+                    # Also keep the original version
+                    print(f"Original model preserved at: {output_path}")
+                else:
+                    print("No TensorRT fixes were needed")
+                    # If no fixes needed, just copy to TRT version for consistency
+                    import shutil
+                    shutil.copy2(output_path, trt_output_path)
+                    print(f"TensorRT version (unchanged) saved to: {trt_output_path}")
+            except Exception as e:
+                print(f"Warning: TensorRT compatibility fix failed: {e}")
+                print("Original ONNX model is still available")
+        
         return output_path
     except Exception as e:
         print(f"Error exporting {model_type.upper()} distillation model: {e}")
@@ -409,6 +557,7 @@ def main():
     parser.add_argument('-p', '--plans', type=str, default='nnUNetPlans', help='Plans identifier')
     parser.add_argument('-spl', '--student_plans', type=str, default='nnUNetPlans', help='Student plans identifier')
     parser.add_argument('-r', '--reduction_factor', type=int, default=2, help='Feature reduction factor')
+    parser.add_argument('--trt', '--tensorrt', action='store_true', dest='trt_compatible', help='Apply TensorRT compatibility fixes')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed output')
     
     args = parser.parse_args()
@@ -424,6 +573,7 @@ def main():
         plans_identifier=args.plans,
         student_plans_identifier=args.student_plans,
         feature_reduction_factor=args.reduction_factor,
+        trt_compatible=args.trt_compatible,
         verbose=args.verbose
     )
 

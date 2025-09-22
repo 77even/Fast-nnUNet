@@ -1030,11 +1030,21 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             
         # Get network weights
         new_state_dict = {}
+        current_model_keys = set(self.network.state_dict().keys())
+        
         for k, value in checkpoint['network_weights'].items():
             key = k
             # Handle weights created by DataParallel
-            if key not in self.network.state_dict().keys() and key.startswith('module.'):
+            if key not in current_model_keys and key.startswith('module.'):
                 key = key[7:]
+            # Handle weights created by torch.compile (OptimizedModule)
+            if key not in current_model_keys and key.startswith('_orig_mod.'):
+                key = key[10:]  # Remove '_orig_mod.' prefix
+            # Handle reverse case: checkpoint has no _orig_mod prefix but current model does
+            if key not in current_model_keys and not key.startswith('_orig_mod.'):
+                potential_key = '_orig_mod.' + key
+                if potential_key in current_model_keys:
+                    key = potential_key
             # Add to new state dictionary
             new_state_dict[key] = value
         
@@ -1046,48 +1056,83 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
         missing_keys = model_keys - checkpoint_keys
         unexpected_keys = checkpoint_keys - model_keys
         
-        if len(missing_keys) > 0:
-            self.print_to_log_file(f"Warning: The following keys are missing in the checkpoint: {missing_keys}")
-        if len(unexpected_keys) > 0:
-            self.print_to_log_file(f"Warning: The checkpoint contains unexpected keys: {unexpected_keys}")
+        # Calculate compatibility statistics
+        compatible_keys = model_keys & checkpoint_keys
+        compatible_params = {k: v for k, v in new_state_dict.items() 
+                           if k in model_keys and k in self.network.state_dict() 
+                           and self.network.state_dict()[k].shape == v.shape}
         
-        # Try to load weights into model
+        total_model_params = len(model_keys)
+        total_compatible_params = len(compatible_params)
+        compatibility_ratio = total_compatible_params / total_model_params if total_model_params > 0 else 0
+        
+        self.print_to_log_file(f"Model compatibility analysis:")
+        self.print_to_log_file(f"  Total model parameters: {total_model_params}")
+        self.print_to_log_file(f"  Compatible parameters: {total_compatible_params}")
+        self.print_to_log_file(f"  Compatibility ratio: {compatibility_ratio:.2%}")
+        
+        if len(missing_keys) > 0:
+            self.print_to_log_file(f"  Parameters missing in checkpoint: {len(missing_keys)}")
+            # Only show first 10 missing keys to avoid cluttering the log
+            if len(missing_keys) <= 10:
+                self.print_to_log_file(f"  Missing keys: {missing_keys}")
+            else:
+                missing_sample = list(missing_keys)[:10]
+                self.print_to_log_file(f"  Missing keys (first 10): {missing_sample}")
+                self.print_to_log_file(f"  ... and {len(missing_keys) - 10} more")
+                
+        if len(unexpected_keys) > 0:
+            self.print_to_log_file(f"  Unexpected keys in checkpoint: {len(unexpected_keys)}")
+            # Only show first 10 unexpected keys to avoid cluttering the log
+            if len(unexpected_keys) <= 10:
+                self.print_to_log_file(f"  Unexpected keys: {unexpected_keys}")
+            else:
+                unexpected_sample = list(unexpected_keys)[:10]
+                self.print_to_log_file(f"  Unexpected keys (first 10): {unexpected_sample}")
+                self.print_to_log_file(f"  ... and {len(unexpected_keys) - 10} more")
+        
+        # Always use partial loading for distillation models to handle architecture differences
+        self.print_to_log_file("Loading compatible parameters (partial loading for architecture flexibility)...")
+        
+        # Get current model state dict
+        current_model_dict = self.network.state_dict()
+        
+        # Filter to only compatible parameters (same name and same shape)
+        filtered_state_dict = {}
+        for k, v in new_state_dict.items():
+            if k in current_model_dict and current_model_dict[k].shape == v.shape:
+                filtered_state_dict[k] = v
+        
+        # Update current model dict with compatible parameters
+        current_model_dict.update(filtered_state_dict)
+        
+        # Load the updated state dict
         try:
-            # Load directly to the actual network, no temporary network validation needed
             if self.is_ddp:
                 if isinstance(self.network.module, OptimizedModule):
-                    self.network.module._orig_mod.load_state_dict(new_state_dict, strict=False)
+                    self.network.module._orig_mod.load_state_dict(current_model_dict, strict=False)
                 else:
-                    self.network.module.load_state_dict(new_state_dict, strict=False)
+                    self.network.module.load_state_dict(current_model_dict, strict=False)
             else:
                 if isinstance(self.network, OptimizedModule):
-                    self.network._orig_mod.load_state_dict(new_state_dict, strict=False)
+                    self.network._orig_mod.load_state_dict(current_model_dict, strict=False)
                 else:
-                    self.network.load_state_dict(new_state_dict, strict=False)
+                    self.network.load_state_dict(current_model_dict, strict=False)
                     
-            self.print_to_log_file("Successfully loaded network weights")
+            self.print_to_log_file(f"Successfully loaded {len(filtered_state_dict)} compatible parameters out of {total_model_params} total parameters")
             
+            if compatibility_ratio < 0.5:
+                self.print_to_log_file(f"Warning: Low compatibility ratio ({compatibility_ratio:.2%}). Model architecture may be significantly different.")
+                self.print_to_log_file("Consider starting training from scratch if performance is poor.")
+            elif compatibility_ratio < 0.8:
+                self.print_to_log_file(f"Notice: Moderate compatibility ratio ({compatibility_ratio:.2%}). Some architecture differences detected.")
+            else:
+                self.print_to_log_file(f"Good compatibility ratio ({compatibility_ratio:.2%}). Most parameters loaded successfully.")
+                
         except Exception as e:
-            self.print_to_log_file(f"Error loading model weights: {e}")
-            self.print_to_log_file("Will try to load compatible parts")
-            
-            # Try to load compatible parts
-            model_dict = self.network.state_dict()
-            pretrained_dict = {k: v for k, v in new_state_dict.items() if k in model_dict and model_dict[k].shape == v.shape}
-            model_dict.update(pretrained_dict)
-            
-            if self.is_ddp:
-                if isinstance(self.network.module, OptimizedModule):
-                    self.network.module._orig_mod.load_state_dict(model_dict)
-                else:
-                    self.network.module.load_state_dict(model_dict)
-            else:
-                if isinstance(self.network, OptimizedModule):
-                    self.network._orig_mod.load_state_dict(model_dict)
-                else:
-                    self.network.load_state_dict(model_dict)
-                    
-            self.print_to_log_file(f"Successfully loaded partial model weights, loaded {len(pretrained_dict)} parameters")
+            self.print_to_log_file(f"Error during partial loading: {e}")
+            self.print_to_log_file("Will initialize with random weights for incompatible parts")
+            raise e
             
         # Load optimizer state
         try:
