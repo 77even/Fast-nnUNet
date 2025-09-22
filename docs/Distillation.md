@@ -98,29 +98,49 @@ Use the trained teacher models for knowledge distillation:
 
 ```bash
 # Basic usage (using all available folds of teacher models)
-nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
 
 # Advanced usage - specify specific teacher model folds
-nnUNetv2_distillation_train -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2
 
 # Continue previous training
-nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -c_continue
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -c_continue
+
+# With custom teacher model path
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -t /path/to/teacher -a 0.3 -temp 3.0 -r 2
+
+# Disable mirroring during validation
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -disable_mirroring
+
+# Enable fold rotation during training
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -rotate_folds -rotate_freq 400
 ```
 
 #### ResEnc Knowledge Distillation (Enhanced Performance)
 
 ```bash
 # Basic ResEnc distillation (using ResEnc teacher models)
-nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
 
 # Advanced ResEnc distillation - specify teacher plans and folds
-nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetMPlans/nnUNetResEncUNetLPlans/nnUNetResEncUNetXLPlans
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans
+
+# ResEnc distillation with different teacher plan variants
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetMPlans  # Medium
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans  # Large
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetXLPlans # Extra Large
 
 # ResEnc distillation with custom teacher model path
-nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -t /path/to/resenc/teacher -a 0.3 -temp 3.0 -r 2
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -t /path/to/resenc/teacher -a 0.3 -temp 3.0 -r 2
+
+# ResEnc distillation with different student plans (ResEnc student)
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -spl nnUNetResEncUNetMPlans
+
+# ResEnc distillation with block reduction strategy
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -bs adaptive
 
 # Continue ResEnc distillation training
-nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -c_continue
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -c_continue
 ```
 
 Parameter description:
@@ -133,8 +153,13 @@ Parameter description:
 - `-c_continue, --continue_training`: Continue previous training
 - `-disable_mirroring`: Disable mirror augmentation during validation
 - `-e, --epochs`: Maximum number of training epochs (default 1000)
-- `-t, --teacher_model_folder`: Teacher model folder path (ResEnc specific, auto-constructed if not provided)
+- `-t, --teacher_model_folder`: Teacher model folder path (auto-constructed if not provided)
 - `-tpl, --teacher_plans`: Teacher model plans identifier (ResEnc specific, default: nnUNetResEncUNetLPlans)
+- `-spl, --student_plans`: Student model plans identifier (ResEnc specific, default: nnUNetPlans)
+- `-bs, --block_strategy`: Block reduction strategy for ResEnc (reduce/keep/increase/adaptive, default: keep)
+- `-rotate_folds`: Enable rotating training folds periodically
+- `-rotate_freq`: How often to rotate folds (in epochs, default: 5 for ResEnc, 400 for standard)
+- `-d_device`: Device to use, e.g., "cuda:0"
 
 ### 3. 📤 Export ONNX Model
 
@@ -144,38 +169,62 @@ Export the trained student model to ONNX format for fast inference:
 
 ```bash
 # Basic export
-nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2
+python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2
 
 # Verbose information display
-nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -v
+python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -v
 
 # Specify output path
-nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -o /path/to/output.onnx
+python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -o /path/to/output.onnx
+
+# Export with static input shape
+python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --static
+
+# Export with custom input shape
+python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --input_shape 1 1 128 128 128
+
+# Export in nnUNet format (single channel, fixed size)
+python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --nnunet_format
 ```
 
 #### ResEnc Distillation Model Export
 
 ```bash
 # Basic ResEnc model export
-nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2
+python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2
 
 # ResEnc export with verbose output
-nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -v
+python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -v
 
-# ResEnc export with custom output path
-nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -o /path/to/resenc_output.onnx
+# ResEnc export with custom output directory
+python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -o /path/to/output/dir
 
-# ResEnc export with static input shape
-nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -static
+# ResEnc export with specific student plans
+python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -spl nnUNetResEncUNetMPlans
+
+# ResEnc export with fixed batch size
+python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -b 1
+
+# ResEnc export with TensorRT compatibility
+python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --trt
+
+# ResEnc export with custom plans identifier
+python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -p nnUNetResEncUNetLPlans
 ```
 
 Parameter description:
 - `-d, --dataset_id`: Dataset ID
 - `-f, --fold`: Model fold number
 - `-r, --reduction_factor`: Feature reduction factor, must be consistent with training
-- `-o, --output`: Output ONNX file path
+- `-o, --output`: Output ONNX file path (standard) or output directory (ResEnc)
 - `-v, --verbose`: Display detailed information
-- `-static`: Use static input shape (default uses dynamic shape)
+- `--static`: Use static input shape (default uses dynamic shape)
+- `--input_shape`: Custom input shape (b c x y z) - standard export only
+- `--nnunet_format`: Export single channel fixed size model - standard export only
+- `-spl, --student_plans`: Student model plans identifier - ResEnc export only
+- `-b, --batch_size`: Batch size, 0 means dynamic - ResEnc export only
+- `--trt`: Apply TensorRT compatibility fixes - ResEnc export only
+- `-p, --plans`: Plans identifier - ResEnc export only
 
 ## Parameter Tuning Recommendations
 
@@ -205,10 +254,10 @@ If you have teacher models trained elsewhere, you can specify them using the `-t
 
 ```bash
 # Standard distillation with custom teacher
-nnUNetv2_distillation_train -d DATASET_ID -f 0 -t /path/to/teacher/model -a 0.3 -temp 3.0 -r 2
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -t /path/to/teacher/model -a 0.3 -temp 3.0 -r 2
 
 # ResEnc distillation with custom teacher
-nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -t /path/to/resenc/teacher/model -a 0.3 -temp 3.0 -r 2
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -t /path/to/resenc/teacher/model -a 0.3 -temp 3.0 -r 2
 ```
 
 ### ResEnc Architecture Variants
@@ -217,13 +266,13 @@ Choose different ResEnc architectures based on your computational requirements:
 
 ```bash
 # ResEnc Medium (balanced performance and efficiency)
-nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -tpl nnUNetResEncUNetMPlans -a 0.3 -temp 3.0 -r 2
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -tpl nnUNetResEncUNetMPlans -a 0.3 -temp 3.0 -r 2
 
 # ResEnc Large (higher performance for complex tasks)
-nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -tpl nnUNetResEncUNetLPlans -a 0.3 -temp 3.0 -r 2
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -tpl nnUNetResEncUNetLPlans -a 0.3 -temp 3.0 -r 2
 
 # ResEnc Extra Large (maximum performance)
-nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -tpl nnUNetResEncUNetXLPlans -a 0.3 -temp 3.0 -r 2
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -tpl nnUNetResEncUNetXLPlans -a 0.3 -temp 3.0 -r 2
 ```
 
 ### 💪 Multi-GPU Training
@@ -232,10 +281,14 @@ Although student models are usually smaller, multi-GPU training is still support
 
 ```bash
 # Standard distillation multi-GPU
-CUDA_VISIBLE_DEVICES=0,1 nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+CUDA_VISIBLE_DEVICES=0,1 python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
 
 # ResEnc distillation multi-GPU
-CUDA_VISIBLE_DEVICES=0,1 nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+CUDA_VISIBLE_DEVICES=0,1 python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+
+# Specify specific GPU device
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -d_device cuda:0
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -d_device cuda:1
 ```
 
 ## 🔧 Troubleshooting
