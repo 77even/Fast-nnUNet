@@ -68,6 +68,7 @@ from dynamic_network_architectures.building_blocks.plain_conv_encoder import Pla
 from dynamic_network_architectures.building_blocks.unet_decoder import UNetDecoder
 from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
 from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
+from nnunetv2.training.nnUNetTrainer.variants.data_augmentation.nnUNetTrainerDA5 import nnUNetTrainerDA5
 
 # Lightweight nnU-Net student model consistent with the original nnUNet architecture
 class LiteNNUNetStudent(nn.Module):
@@ -1149,4 +1150,40 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             except Exception as e:
                 self.print_to_log_file(f"Error loading gradient scaler state: {e}")
                 
-        self.print_to_log_file(f"Resuming training from epoch {self.current_epoch}") 
+        self.print_to_log_file(f"Resuming training from epoch {self.current_epoch}")
+
+
+class nnUNetDistillationTrainerDA5(nnUNetDistillationTrainer, nnUNetTrainerDA5):
+    """
+    Knowledge Distillation Trainer with DA5 Strong Data Augmentation
+    
+    Simple multiple inheritance approach - inherits distillation from nnUNetDistillationTrainer
+    and DA5 data augmentation from nnUNetTrainerDA5.
+    """
+    
+    def __init__(self, plans, configuration, fold, dataset_json, 
+                 teacher_model_folder=None, 
+                 teacher_fold=0,
+                 teacher_checkpoint_name='checkpoint_final.pth',
+                 alpha=0.3,
+                 temperature=3.0,
+                 feature_reduction_factor=2,
+                 block_reduction_strategy='keep',
+                 rotate_training_folds=False,
+                 rotate_folds_frequency=5,
+                 device=torch.device('cuda')):
+        """
+        Initialize the DA5-enhanced distillation trainer
+        
+        Parameters are the same as nnUNetDistillationTrainer, but this trainer
+        uses the strong data augmentation from DA5 for better performance on small datasets.
+        """
+        # Initialize the base distillation trainer (this handles all distillation logic)
+        nnUNetDistillationTrainer.__init__(
+            self, plans, configuration, fold, dataset_json,
+            teacher_model_folder, teacher_fold, teacher_checkpoint_name,
+            alpha, temperature, feature_reduction_factor, block_reduction_strategy,
+            rotate_training_folds, rotate_folds_frequency, device
+        )
+        
+        self.print_to_log_file("Using DA5 strong data augmentation for knowledge distillation") 

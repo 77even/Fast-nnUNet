@@ -37,7 +37,7 @@ sys.path.insert(0, nnunet_dir)
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 
 # Import nnUNetDistillationTrainer directly
-from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer
+from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, nnUNetDistillationTrainerDA5
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
 
 def get_dataset_name_from_id(dataset_id):
@@ -73,7 +73,8 @@ def run_distillation_training(dataset_id,
                              rotate_training_folds=False,
                              rotate_folds_frequency=5,
                              device=None,
-                             epochs=1000):
+                             epochs=1000,
+                             use_da5=False):
     """
     Run nnUNet knowledge distillation training.
     
@@ -93,6 +94,7 @@ def run_distillation_training(dataset_id,
         rotate_folds_frequency: How often to rotate folds (in epochs)
         device: Device to use, e.g., 'cuda:0'
         epochs: Maximum number of training epochs
+        use_da5: Whether to use DA5 strong data augmentation (recommended for small datasets)
     """
     # Parse dataset ID to full name
     dataset_name = get_dataset_name_from_id(dataset_id)
@@ -157,21 +159,40 @@ def run_distillation_training(dataset_id,
         device = torch.device(device)
     
     # Create distillation trainer instance directly
-    trainer = nnUNetDistillationTrainer(
-        plans=plans,
-        configuration=configuration,
-        fold=fold,
-        dataset_json=dataset_json,
-        teacher_model_folder=teacher_model_folder,
-        teacher_fold=teacher_folds,
-        teacher_checkpoint_name=teacher_checkpoint_name,
-        alpha=alpha,
-        temperature=temperature,
-        feature_reduction_factor=feature_reduction_factor,
-        rotate_training_folds=rotate_training_folds,
-        rotate_folds_frequency=rotate_folds_frequency,
-        device=device
-    )
+    if use_da5:
+        trainer = nnUNetDistillationTrainerDA5(
+            plans=plans,
+            configuration=configuration,
+            fold=fold,
+            dataset_json=dataset_json,
+            teacher_model_folder=teacher_model_folder,
+            teacher_fold=teacher_folds,
+            teacher_checkpoint_name=teacher_checkpoint_name,
+            alpha=alpha,
+            temperature=temperature,
+            feature_reduction_factor=feature_reduction_factor,
+            rotate_training_folds=rotate_training_folds,
+            rotate_folds_frequency=rotate_folds_frequency,
+            device=device
+        )
+        print("Using DA5 strong data augmentation for knowledge distillation")
+    else:
+        trainer = nnUNetDistillationTrainer(
+            plans=plans,
+            configuration=configuration,
+            fold=fold,
+            dataset_json=dataset_json,
+            teacher_model_folder=teacher_model_folder,
+            teacher_fold=teacher_folds,
+            teacher_checkpoint_name=teacher_checkpoint_name,
+            alpha=alpha,
+            temperature=temperature,
+            feature_reduction_factor=feature_reduction_factor,
+            rotate_training_folds=rotate_training_folds,
+            rotate_folds_frequency=rotate_folds_frequency,
+            device=device
+        )
+        print("Using standard data augmentation for knowledge distillation")
     
     # Output training configuration information
     print(f"\n============ Knowledge Distillation Training Configuration ============")
@@ -253,6 +274,7 @@ def main():
     parser.add_argument('-rotate_freq', '--rotate_folds_frequency', type=int, default=400, 
                        help='How often to rotate folds (in epochs) (default: 5)')
     parser.add_argument('-e', '--epochs', type=int, default=1000, help='Maximum number of training epochs (default: 1000)')
+    parser.add_argument('--use_da5', action='store_true', help='Use DA5 strong data augmentation (recommended for small datasets)')
     
     # Parse command line arguments
     args = parser.parse_args()
@@ -273,7 +295,8 @@ def main():
         rotate_training_folds=args.rotate_training_folds,
         rotate_folds_frequency=args.rotate_folds_frequency,
         device=args.device,
-        epochs=args.epochs
+        epochs=args.epochs,
+        use_da5=args.use_da5
     )
 
 if __name__ == "__main__":

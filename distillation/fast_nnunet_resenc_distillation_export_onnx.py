@@ -44,7 +44,7 @@ sys.path.insert(0, nnunet_dir)
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 
 # Import nnUNetDistillationTrainer directly
-from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, LiteNNUNetStudent, LiteResEncStudent
+from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, nnUNetDistillationTrainerDA5, LiteNNUNetStudent, LiteResEncStudent
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
@@ -203,7 +203,7 @@ def fix_instance_norm_for_trt(input_onnx_path, output_onnx_path=None, verbose=Fa
     return fixed_count > 0
 
 def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configuration, fold, 
-                             student_plans_identifier, feature_reduction_factor, device, verbose=False):
+                             student_plans_identifier, feature_reduction_factor, device, verbose=False, use_da5=False):
     """Load distillation student model from checkpoint"""
     
     # Determine student model type based on student_plans_identifier
@@ -216,15 +216,26 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
             print("Loading standard UNet student model architecture...")
     
     # Create trainer instance to get model architecture parameters
-    trainer = nnUNetDistillationTrainer(
-        plans=plans,
-        configuration=configuration,
-        fold=fold,
-        dataset_json=dataset_json,
-        teacher_model_folder=None,
-        feature_reduction_factor=feature_reduction_factor,
-        device=device
-    )
+    if use_da5:
+        trainer = nnUNetDistillationTrainerDA5(
+            plans=plans,
+            configuration=configuration,
+            fold=fold,
+            dataset_json=dataset_json,
+            teacher_model_folder=None,
+            feature_reduction_factor=feature_reduction_factor,
+            device=device
+        )
+    else:
+        trainer = nnUNetDistillationTrainer(
+            plans=plans,
+            configuration=configuration,
+            fold=fold,
+            dataset_json=dataset_json,
+            teacher_model_folder=None,
+            feature_reduction_factor=feature_reduction_factor,
+            device=device
+        )
     
     # Set student plans identifier for correct architecture selection
     trainer.student_plans_identifier = student_plans_identifier
@@ -390,7 +401,8 @@ def export_resenc_distillation_to_onnx(dataset_id,
                                      student_plans_identifier='nnUNetPlans',
                                      feature_reduction_factor=2,
                                      trt_compatible=False,
-                                     verbose=False):
+                                     verbose=False,
+                                     use_da5=False):
     """
     Export ResEnc distillation model to ONNX format
     
@@ -406,6 +418,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
         feature_reduction_factor: Feature reduction factor
         trt_compatible: Apply TensorRT compatibility fixes
         verbose: Show detailed output
+        use_da5: Whether the model was trained with DA5 data augmentation
     """
     # Parse dataset ID to full name
     dataset_name = get_dataset_name_from_id(dataset_id)
@@ -413,8 +426,13 @@ def export_resenc_distillation_to_onnx(dataset_id,
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Determine model folder path
-    model_folder = join(nnUNet_results, dataset_name, f"nnUNetDistillationTrainer__{student_plans_identifier}__{configuration}")
+    # Determine model folder path based on whether DA5 was used
+    if use_da5:
+        trainer_name = "nnUNetDistillationTrainerDA5"
+    else:
+        trainer_name = "nnUNetDistillationTrainer"
+    
+    model_folder = join(nnUNet_results, dataset_name, f"{trainer_name}__{student_plans_identifier}__{configuration}")
     model_folder_fold = join(model_folder, f"fold_{fold}")
     
     if not os.path.exists(model_folder_fold):
@@ -443,7 +461,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
     # Load model from checkpoint
     model, num_input_channels, num_output_channels, config = load_model_from_checkpoint(
         checkpoint_path, plans, dataset_json, configuration, fold,
-        student_plans_identifier, feature_reduction_factor, device, verbose
+        student_plans_identifier, feature_reduction_factor, device, verbose, use_da5
     )
     
     # Set output directory
@@ -463,6 +481,8 @@ def export_resenc_distillation_to_onnx(dataset_id,
     # Determine model type for filename
     is_resenc_student = 'ResEnc' in student_plans_identifier
     model_type = "resenc" if is_resenc_student else "unet"
+    if use_da5:
+        model_type += "_da5"
     
     # Create dummy input
     if batch_size > 0:
@@ -559,6 +579,7 @@ def main():
     parser.add_argument('-r', '--reduction_factor', type=int, default=2, help='Feature reduction factor')
     parser.add_argument('--trt', '--tensorrt', action='store_true', dest='trt_compatible', help='Apply TensorRT compatibility fixes')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed output')
+    parser.add_argument('--use_da5', action='store_true', help='Model was trained with DA5 data augmentation')
     
     args = parser.parse_args()
     
@@ -574,7 +595,8 @@ def main():
         student_plans_identifier=args.student_plans,
         feature_reduction_factor=args.reduction_factor,
         trt_compatible=args.trt_compatible,
-        verbose=args.verbose
+        verbose=args.verbose,
+        use_da5=args.use_da5
     )
 
 if __name__ == '__main__':

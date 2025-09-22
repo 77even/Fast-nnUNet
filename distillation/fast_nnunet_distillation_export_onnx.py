@@ -32,7 +32,7 @@ sys.path.insert(0, nnunet_dir)
 # Import paths and related functionalities from nnunetv2
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
-from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, LiteNNUNetStudent
+from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, nnUNetDistillationTrainerDA5, LiteNNUNetStudent
 
 def get_dataset_name_from_id(dataset_id):
     """Get the complete dataset name from dataset ID"""
@@ -63,7 +63,8 @@ def export_to_onnx(dataset_id,
                    dynamic_axes=True,
                    input_shape=None,
                    nnunet_style=False,
-                   verbose=False):
+                   verbose=False,
+                   use_da5=False):
     """
     Export trained nnUNet distillation student model to ONNX format
     
@@ -79,6 +80,7 @@ def export_to_onnx(dataset_id,
         input_shape: Custom input shape (b, c, x, y, z), default None uses model's accepted shape
         nnunet_style: Whether to use nnUNet style output
         verbose: Whether to display detailed information
+        use_da5: Whether the model was trained with DA5 data augmentation
     """
     # Parse dataset ID to full name
     dataset_name = get_dataset_name_from_id(dataset_id)
@@ -89,8 +91,13 @@ def export_to_onnx(dataset_id,
     else:
         device = torch.device(device)
     
-    # Determine model folder path
-    model_folder = join(nnUNet_results, dataset_name, f"nnUNetDistillationTrainer__nnUNetPlans__{configuration}")
+    # Determine model folder path based on whether DA5 was used
+    if use_da5:
+        trainer_name = "nnUNetDistillationTrainerDA5"
+    else:
+        trainer_name = "nnUNetDistillationTrainer"
+    
+    model_folder = join(nnUNet_results, dataset_name, f"{trainer_name}__nnUNetPlans__{configuration}")
     model_folder_fold = join(model_folder, f"fold_{fold}")
     
     if not os.path.exists(model_folder_fold):
@@ -117,15 +124,26 @@ def export_to_onnx(dataset_id,
         dataset_json = json.load(f)
     
     # Create trainer instance (just to load model parameters)
-    trainer = nnUNetDistillationTrainer(
-        plans=plans,
-        configuration=configuration,
-        fold=fold,
-        dataset_json=dataset_json,
-        teacher_model_folder=None,
-        feature_reduction_factor=feature_reduction_factor,
-        device=device
-    )
+    if use_da5:
+        trainer = nnUNetDistillationTrainerDA5(
+            plans=plans,
+            configuration=configuration,
+            fold=fold,
+            dataset_json=dataset_json,
+            teacher_model_folder=None,
+            feature_reduction_factor=feature_reduction_factor,
+            device=device
+        )
+    else:
+        trainer = nnUNetDistillationTrainer(
+            plans=plans,
+            configuration=configuration,
+            fold=fold,
+            dataset_json=dataset_json,
+            teacher_model_folder=None,
+            feature_reduction_factor=feature_reduction_factor,
+            device=device
+        )
     
     # Initialize network architecture (full trainer initialization not needed)
     num_input_channels = determine_num_input_channels(trainer.plans_manager, trainer.configuration_manager, dataset_json)
@@ -349,10 +367,11 @@ def export_to_onnx(dataset_id,
         os.makedirs(output_dir, exist_ok=True)
 
         # add special identifier for single channel fixed size model
+        da5_suffix = "_da5" if use_da5 else ""
         if nnunet_style:
-            output_path = join(output_dir, f"model_fold{fold}_{feature_reduction_factor}x_nnunet_format.onnx")
+            output_path = join(output_dir, f"model_fold{fold}_{feature_reduction_factor}x{da5_suffix}_nnunet_format.onnx")
         else:
-            output_path = join(output_dir, f"model_fold{fold}_{feature_reduction_factor}x.onnx")
+            output_path = join(output_dir, f"model_fold{fold}_{feature_reduction_factor}x{da5_suffix}.onnx")
     
     # Create input sample - use typical 3D medical image shape or custom shape
     if input_shape is None:
@@ -453,6 +472,7 @@ def main():
     parser.add_argument('--input_shape', type=int, nargs='+', help='Custom input shape (b c x y z)')
     parser.add_argument('--nnunet_format', action='store_true', dest='single_channel_fixed_size', help='导出单通道固定尺寸模型 [batch_size, 1, 固定尺寸]')
     parser.add_argument('-v', '--verbose', action='store_true', help='Display detailed information')
+    parser.add_argument('--use_da5', action='store_true', help='Model was trained with DA5 data augmentation')
     
     args = parser.parse_args()
     
@@ -475,7 +495,8 @@ def main():
         dynamic_axes=args.dynamic_axes,
         input_shape=input_shape,
         nnunet_style=args.nnunet_format,
-        verbose=args.verbose
+        verbose=args.verbose,
+        use_da5=args.use_da5
     )
 
 if __name__ == '__main__':

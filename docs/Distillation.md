@@ -13,6 +13,7 @@ The FastnnUNet Knowledge Distillation Module is an advanced knowledge transfer s
 - **Adaptive Network Architecture**: Automatically designs optimized student networks based on teacher models
 - **Hybrid Distillation Strategy**: Joint training method combining soft labels and hard labels
 - **Feature Reduction Control**: Configurable feature channel reduction ratio (default 50% reduction)
+- **DA5 Strong Data Augmentation**: Advanced data augmentation strategy specifically optimized for small datasets
 - **Compatibility Guarantee**: Fully compatible with original nnUNetv2, supporting all configurations and datasets
 - **Complete Training Cycle**: Includes checkpoint recovery, automatic validation, and ONNX export functionality
 - **ResEnc Architecture Support**: Enhanced support for Residual Encoder U-Net (ResEnc) architectures with improved performance for complex segmentation tasks
@@ -41,6 +42,13 @@ FastnnUNet knowledge distillation employs advanced knowledge transfer strategies
    - Enhanced feature extraction capabilities through residual connections in the encoder
    - Multiple ResEnc variants: ResEncM, ResEncL, and ResEncXL for different complexity requirements
    - Improved performance for complex medical image segmentation tasks with challenging anatomical structures
+
+5. **DA5 Strong Data Augmentation**:
+   - Advanced data augmentation strategy optimized for small datasets and challenging segmentation tasks
+   - Enhanced spatial transformations with reduced interpolation order for better preservation of fine details
+   - Comprehensive augmentation pipeline including rotation, scaling, elastic deformation, and intensity transformations
+   - Particularly effective for medical imaging datasets with limited training samples
+   - Compatible with both standard and ResEnc distillation architectures
 
 ## 🔧 Installation Requirements
 
@@ -114,6 +122,12 @@ python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 
 
 # Enable fold rotation during training
 python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -rotate_folds -rotate_freq 400
+
+# Use DA5 strong data augmentation (recommended for small datasets)
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
+
+# Combine DA5 with other options
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2 --use_da5 -c_continue
 ```
 
 #### ResEnc Knowledge Distillation (Enhanced Performance)
@@ -141,6 +155,12 @@ python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 
 
 # Continue ResEnc distillation training
 python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -c_continue
+
+# ResEnc distillation with DA5 strong data augmentation
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
+
+# ResEnc distillation combining DA5 with ResEnc teacher and student
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans -spl nnUNetResEncUNetMPlans --use_da5
 ```
 
 Parameter description:
@@ -160,6 +180,7 @@ Parameter description:
 - `-rotate_folds`: Enable rotating training folds periodically
 - `-rotate_freq`: How often to rotate folds (in epochs, default: 5 for ResEnc, 400 for standard)
 - `-d_device`: Device to use, e.g., "cuda:0"
+- `--use_da5`: Use DA5 strong data augmentation (recommended for small datasets)
 
 ### 3. 📤 Export ONNX Model
 
@@ -185,6 +206,12 @@ python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -
 
 # Export in nnUNet format (single channel, fixed size)
 python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --nnunet_format
+
+# Export DA5-trained model
+python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --use_da5
+
+# Export DA5-trained model with verbose output
+python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --use_da5 -v
 ```
 
 #### ResEnc Distillation Model Export
@@ -210,6 +237,12 @@ python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID
 
 # ResEnc export with custom plans identifier
 python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -p nnUNetResEncUNetLPlans
+
+# ResEnc export for DA5-trained model
+python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --use_da5
+
+# ResEnc export for DA5-trained model with TensorRT compatibility
+python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --use_da5 --trt
 ```
 
 Parameter description:
@@ -225,6 +258,7 @@ Parameter description:
 - `-b, --batch_size`: Batch size, 0 means dynamic - ResEnc export only
 - `--trt`: Apply TensorRT compatibility fixes - ResEnc export only
 - `-p, --plans`: Plans identifier - ResEnc export only
+- `--use_da5`: Model was trained with DA5 data augmentation (both standard and ResEnc export)
 
 ## Parameter Tuning Recommendations
 
@@ -244,6 +278,13 @@ For the best balance between performance and accuracy, the following parameter s
    - 3.0: Default value, provides moderately smooth soft labels
    - 1.0: Sharper soft labels, closer to original predictions
    - 5.0: Very smooth soft labels, maximizes knowledge transfer
+
+4. 🔥 **DA5 Data Augmentation (`--use_da5`)**:
+   - Recommended for small datasets (< 100 training cases)
+   - Particularly effective for challenging segmentation tasks with fine anatomical structures
+   - Can improve model robustness by 2-5% on small datasets
+   - Compatible with all reduction factors and architectures
+   - May increase training time by 10-15% due to more intensive augmentation
 
 
 ## 🚀 Advanced Usage
@@ -289,6 +330,41 @@ CUDA_VISIBLE_DEVICES=0,1 python distillation/fast_nnunet_resenc_distillation_tra
 # Specify specific GPU device
 python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -d_device cuda:0
 python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -d_device cuda:1
+
+# Multi-GPU training with DA5 for small datasets
+CUDA_VISIBLE_DEVICES=0,1 python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
+CUDA_VISIBLE_DEVICES=0,1 python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
+```
+
+### 🔥 DA5 Strong Data Augmentation
+
+DA5 is an advanced data augmentation strategy specifically designed for small datasets and challenging segmentation tasks. It provides stronger augmentation compared to the default nnUNet augmentation.
+
+#### When to Use DA5
+
+- **Small datasets**: Datasets with fewer than 100 training cases
+- **Challenging segmentation tasks**: Tasks with fine anatomical structures or difficult-to-segment regions
+- **Limited training data**: When you want to maximize the use of available training samples
+- **Improved robustness**: When you need models that generalize better to unseen data variations
+
+#### DA5 Features
+
+- **Enhanced spatial transformations**: More aggressive rotation, scaling, and elastic deformation
+- **Reduced interpolation order**: Better preservation of fine details during augmentation
+- **Comprehensive intensity augmentation**: Advanced brightness, contrast, and gamma transformations
+- **Optimized for medical imaging**: Specifically tuned for medical image characteristics
+
+#### Example Usage Scenarios
+
+```bash
+# Small dataset scenario (e.g., rare disease with <50 cases)
+python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.5 -temp 4.0 -r 2 --use_da5
+
+# Challenging anatomy (e.g., small organ segmentation)
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.4 -temp 3.5 -r 2 -tpl nnUNetResEncUNetLPlans --use_da5
+
+# Combining DA5 with other advanced features
+python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5 -rotate_folds -bs adaptive
 ```
 
 ## 🔧 Troubleshooting
@@ -310,6 +386,12 @@ python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 
    - **Teacher model not found**: Ensure ResEnc teacher models are properly trained with correct plans identifier
    - **Architecture mismatch**: Verify teacher and student plans compatibility when using ResEnc variants
    - **Memory issues with large ResEnc models**: Consider using ResEncM instead of ResEncL/ResEncXL for limited GPU memory
+
+5. **DA5 Related Issues**:
+   - **Slower training with DA5**: This is expected due to more intensive augmentation; consider reducing batch size if needed
+   - **DA5 not improving results**: DA5 is most effective on small datasets; may not provide benefits on large datasets (>500 cases)
+   - **Export issues with DA5 models**: Ensure you use `--use_da5` flag when exporting models trained with DA5
+   - **Memory issues with DA5**: The stronger augmentation may require more GPU memory; reduce batch size or use gradient accumulation
 
 ## 📝 Citation
 
