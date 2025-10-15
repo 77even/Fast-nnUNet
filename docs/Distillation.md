@@ -91,11 +91,16 @@ nnUNetv2_train DATASET_ID 3d_fullres 4
 
 # Alternative: Train ResEnc teacher models for enhanced performance
 nnUNetv2_plan_and_preprocess -d DATASET_ID --verify_dataset_integrity -pl nnUNetPlannerResEncM/nnUNetPlannerResEncL/nnUNetPlannerResEncXL
+
+# If you only intend to run 3d_fullres and 2d and have already preprocessed these datasets, to avoid reprocessing, run directly: 
+nnUNetv2_plan_experiment -d DATASET_ID -pl nnUNetPlannerResEncM/nnUNetPlannerResEncL/nnUNetPlannerResEncXL
+
 nnUNetv2_train DATASET_ID 3d_fullres 0 -p nnUNetResEncUNetMPlans/nnUNetResEncUNetLPlans/nnUNetResEncUNetXLPlans
 nnUNetv2_train DATASET_ID 3d_fullres 1 -p nnUNetResEncUNetMPlans/nnUNetResEncUNetLPlans/nnUNetResEncUNetXLPlans
 nnUNetv2_train DATASET_ID 3d_fullres 2 -p nnUNetResEncUNetMPlans/nnUNetResEncUNetLPlans/nnUNetResEncUNetXLPlans
 nnUNetv2_train DATASET_ID 3d_fullres 3 -p nnUNetResEncUNetMPlans/nnUNetResEncUNetLPlans/nnUNetResEncUNetXLPlans
 nnUNetv2_train DATASET_ID 3d_fullres 4 -p nnUNetResEncUNetMPlans/nnUNetResEncUNetLPlans/nnUNetResEncUNetXLPlans
+
 ```
 
 ### 2. Knowledge Distillation Training
