@@ -111,61 +111,61 @@ Use the trained teacher models for knowledge distillation:
 
 ```bash
 # Basic usage (using all available folds of teacher models)
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
 
 # Advanced usage - specify specific teacher model folds
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2
 
 # Continue previous training
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -c_continue
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -c_continue
 
 # With custom teacher model path
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -t /path/to/teacher -a 0.3 -temp 3.0 -r 2
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -t /path/to/teacher -a 0.3 -temp 3.0 -r 2
 
 # Disable mirroring during validation
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -disable_mirroring
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -disable_mirroring
 
 # Enable fold rotation during training
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -rotate_folds -rotate_freq 400
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -rotate_folds -rotate_freq 400
 
 # Use DA5 strong data augmentation (recommended for small datasets)
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
 
 # Combine DA5 with other options
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2 --use_da5 -c_continue
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2 --use_da5 -c_continue
 ```
 
 #### ResEnc Knowledge Distillation (Enhanced Performance)
 
 ```bash
 # Basic ResEnc distillation (using ResEnc teacher models)
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
 
 # Advanced ResEnc distillation - specify teacher plans and folds
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans
 
 # ResEnc distillation with different teacher plan variants
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetMPlans  # Medium
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans  # Large
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetXLPlans # Extra Large
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetMPlans  # Medium
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans  # Large
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetXLPlans # Extra Large
 
 # ResEnc distillation with custom teacher model path
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -t /path/to/resenc/teacher -a 0.3 -temp 3.0 -r 2
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -t /path/to/resenc/teacher -a 0.3 -temp 3.0 -r 2
 
 # ResEnc distillation with different student plans (ResEnc student)
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -spl nnUNetResEncUNetMPlans
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -spl nnUNetResEncUNetMPlans
 
 # ResEnc distillation with block reduction strategy
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -bs adaptive
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -bs adaptive
 
 # Continue ResEnc distillation training
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -c_continue
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -c_continue
 
 # ResEnc distillation with DA5 strong data augmentation
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
 
 # ResEnc distillation combining DA5 with ResEnc teacher and student
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans -spl nnUNetResEncUNetMPlans --use_da5
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans -spl nnUNetResEncUNetMPlans --use_da5
 ```
 
 Parameter description:
@@ -195,59 +195,59 @@ Export the trained student model to ONNX format for fast inference:
 
 ```bash
 # Basic export
-python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2
 
 # Verbose information display
-python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -v
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -v
 
 # Specify output path
-python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -o /path/to/output.onnx
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -o /path/to/output.onnx
 
 # Export with static input shape
-python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --static
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --static
 
 # Export with custom input shape
-python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --input_shape 1 1 128 128 128
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --input_shape 1 1 128 128 128
 
 # Export in nnUNet format (single channel, fixed size)
-python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --nnunet_format
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --nnunet_format
 
 # Export DA5-trained model
-python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --use_da5
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --use_da5
 
 # Export DA5-trained model with verbose output
-python distillation/fast_nnunet_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --use_da5 -v
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --use_da5 -v
 ```
 
 #### ResEnc Distillation Model Export
 
 ```bash
 # Basic ResEnc model export
-python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2
 
 # ResEnc export with verbose output
-python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -v
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -v
 
 # ResEnc export with custom output directory
-python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -o /path/to/output/dir
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -o /path/to/output/dir
 
 # ResEnc export with specific student plans
-python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -spl nnUNetResEncUNetMPlans
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -spl nnUNetResEncUNetMPlans
 
 # ResEnc export with fixed batch size
-python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -b 1
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -b 1
 
 # ResEnc export with TensorRT compatibility
-python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --trt
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --trt
 
 # ResEnc export with custom plans identifier
-python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 -p nnUNetResEncUNetLPlans
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -p nnUNetResEncUNetLPlans
 
 # ResEnc export for DA5-trained model
-python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --use_da5
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --use_da5
 
 # ResEnc export for DA5-trained model with TensorRT compatibility
-python distillation/fast_nnunet_resenc_distillation_export_onnx.py -d DATASET_ID -f 0 -r 2 --use_da5 --trt
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --use_da5 --trt
 ```
 
 Parameter description:
@@ -300,10 +300,10 @@ If you have teacher models trained elsewhere, you can specify them using the `-t
 
 ```bash
 # Standard distillation with custom teacher
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -t /path/to/teacher/model -a 0.3 -temp 3.0 -r 2
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -t /path/to/teacher/model -a 0.3 -temp 3.0 -r 2
 
 # ResEnc distillation with custom teacher
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -t /path/to/resenc/teacher/model -a 0.3 -temp 3.0 -r 2
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -t /path/to/resenc/teacher/model -a 0.3 -temp 3.0 -r 2
 ```
 
 ### ResEnc Architecture Variants
@@ -312,13 +312,13 @@ Choose different ResEnc architectures based on your computational requirements:
 
 ```bash
 # ResEnc Medium (balanced performance and efficiency)
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -tpl nnUNetResEncUNetMPlans -a 0.3 -temp 3.0 -r 2
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -tpl nnUNetResEncUNetMPlans -a 0.3 -temp 3.0 -r 2
 
 # ResEnc Large (higher performance for complex tasks)
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -tpl nnUNetResEncUNetLPlans -a 0.3 -temp 3.0 -r 2
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -tpl nnUNetResEncUNetLPlans -a 0.3 -temp 3.0 -r 2
 
 # ResEnc Extra Large (maximum performance)
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -tpl nnUNetResEncUNetXLPlans -a 0.3 -temp 3.0 -r 2
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -tpl nnUNetResEncUNetXLPlans -a 0.3 -temp 3.0 -r 2
 ```
 
 ### 💪 Multi-GPU Training
@@ -327,18 +327,18 @@ Although student models are usually smaller, multi-GPU training is still support
 
 ```bash
 # Standard distillation multi-GPU
-CUDA_VISIBLE_DEVICES=0,1 python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+CUDA_VISIBLE_DEVICES=0,1 nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
 
 # ResEnc distillation multi-GPU
-CUDA_VISIBLE_DEVICES=0,1 python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+CUDA_VISIBLE_DEVICES=0,1 nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
 
 # Specify specific GPU device
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -d_device cuda:0
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -d_device cuda:1
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -d_device cuda:0
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -d_device cuda:1
 
 # Multi-GPU training with DA5 for small datasets
-CUDA_VISIBLE_DEVICES=0,1 python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
-CUDA_VISIBLE_DEVICES=0,1 python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
+CUDA_VISIBLE_DEVICES=0,1 nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
+CUDA_VISIBLE_DEVICES=0,1 nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
 ```
 
 ### 🔥 DA5 Strong Data Augmentation
@@ -363,13 +363,13 @@ DA5 is an advanced data augmentation strategy specifically designed for small da
 
 ```bash
 # Small dataset scenario (e.g., rare disease with <50 cases)
-python distillation/fast_nnunet_distillation_train.py -d DATASET_ID -f 0 -a 0.5 -temp 4.0 -r 2 --use_da5
+nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.5 -temp 4.0 -r 2 --use_da5
 
 # Challenging anatomy (e.g., small organ segmentation)
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.4 -temp 3.5 -r 2 -tpl nnUNetResEncUNetLPlans --use_da5
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.4 -temp 3.5 -r 2 -tpl nnUNetResEncUNetLPlans --use_da5
 
 # Combining DA5 with other advanced features
-python distillation/fast_nnunet_resenc_distillation_train.py -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5 -rotate_folds -bs adaptive
+nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5 -rotate_folds -bs adaptive
 ```
 
 ## 🔧 Troubleshooting
