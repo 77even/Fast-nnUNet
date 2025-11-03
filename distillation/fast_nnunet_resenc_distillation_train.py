@@ -243,14 +243,27 @@ def run_resenc_distillation_training(dataset_id,
     if continue_training and checkpoint_exists:
         print(f"Continuing previous training, loading checkpoint: {expected_checkpoint_file}")
         
+        # Clear CUDA cache before initialization to ensure maximum memory available
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            print(f"Cleared CUDA cache. Current memory: {torch.cuda.memory_allocated()/1024**3:.2f}GB / {torch.cuda.get_device_properties(0).total_memory/1024**3:.2f}GB")
+        
         # Add a precaution: don't initialize in the constructor, but actively initialize before reading the checkpoint file
         # This way there is no repeated initialization problem
         if not trainer.was_initialized:
             trainer.initialize()
             
+        # Clear cache again after initialization and before loading checkpoint
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
         # Load checkpoint
         trainer.load_student_checkpoint(expected_checkpoint_file)
         print(f"Successfully loaded checkpoint, will continue training from epoch {trainer.current_epoch}")
+        
+        # Final cache clear before training
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
     else:
         # If not continuing training or no checkpoint file, start training from scratch
         if continue_training and not checkpoint_exists:
