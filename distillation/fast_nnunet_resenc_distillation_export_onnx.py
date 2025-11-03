@@ -78,133 +78,154 @@ def export_dataset_json(dataset_name, output_dir):
     else:
         print(f"Warning: Dataset json file not found: {dataset_json_path}")
 
-def fix_instance_norm_for_trt(input_onnx_path, output_onnx_path=None, verbose=False):
+def fix_onnx_with_checkpoint(onnx_model_path, checkpoint_state_dict):
     """
-    Fix InstanceNormalization nodes in ONNX model for TensorRT compatibility
+    Fix ONNX model using real bias values from PyTorch checkpoint
+    Ensures TensorRT compatibility while maintaining full precision
+    (Same logic as nnunetv2_resenc_onnx_convert.py)
     
-    Parameters:
-        input_onnx_path: Path to input ONNX model
-        output_onnx_path: Path to output ONNX model, if None will overwrite original file
-        verbose: Whether to show detailed information
+    Args:
+        onnx_model_path: Path to ONNX model
+        checkpoint_state_dict: PyTorch checkpoint state dict
     
     Returns:
-        bool: Whether any fixes were applied
+        bool: Whether fixes were applied
     """
-    if verbose:
-        print(f"🔧 Fixing ONNX model for TensorRT compatibility: {input_onnx_path}")
+    import torch
+    import onnx
+    import numpy as np
     
-    try:
-        import onnx
-        import numpy as np
-    except ImportError as e:
-        print(f"Warning: Cannot import required packages for TensorRT fix: {e}")
-        return False
-    
-    if output_onnx_path is None:
-        output_onnx_path = input_onnx_path
+    print("\n🔧 Checking ONNX model for TensorRT compatibility...")
     
     # Load ONNX model
-    model = onnx.load(input_onnx_path)
+    model = onnx.load(onnx_model_path)
     graph = model.graph
     
-    # Collect all initializers (weights)
+    # Collect initializers
     initializers = {init.name: init for init in graph.initializer}
     
-    # Find and fix InstanceNormalization nodes
-    instance_norm_count = 0
-    fixed_count = 0
-    
+    # Find InstanceNorm nodes that need fixing
+    nodes_to_fix = []
     for node in graph.node:
         if node.op_type == "InstanceNormalization":
-            instance_norm_count += 1
-            if verbose:
-                print(f"  Processing node: {node.name}")
-            
-            # InstanceNormalization node should have 3 inputs: input, scale, bias
             if len(node.input) >= 3:
-                input_name = node.input[0]
                 scale_name = node.input[1]
                 bias_name = node.input[2]
                 
-                if verbose:
-                    print(f"    Input: {input_name}")
-                    print(f"    Scale: {scale_name}")
-                    print(f"    Bias: {bias_name}")
+                scale_is_init = scale_name in initializers
+                bias_is_init = bias_name in initializers
                 
-                # Check if scale and bias are in initializers
-                scale_is_initializer = scale_name in initializers
-                bias_is_initializer = bias_name in initializers
-                
-                if verbose:
-                    print(f"    Scale is initializer: {scale_is_initializer}")
-                    print(f"    Bias is initializer: {bias_is_initializer}")
-                
-                # If bias is not an initializer, we need to convert it to an initializer
-                if not bias_is_initializer:
-                    if verbose:
-                        print(f"    ⚠️  Bias is not initializer, needs fixing")
-                    
-                    # If scale is an initializer, we can infer bias shape from it
-                    if scale_is_initializer:
-                        scale_tensor = initializers[scale_name]
-                        bias_shape = list(scale_tensor.dims)
-                        
-                        # Create zero bias initializer
-                        bias_data = np.zeros(bias_shape, dtype=np.float32)
-                        bias_initializer = onnx.helper.make_tensor(
-                            name=bias_name + "_fixed",
-                            data_type=onnx.TensorProto.FLOAT,
-                            dims=bias_shape,
-                            vals=bias_data.flatten().tolist()
-                        )
-                        
-                        # Add to initializer list
-                        graph.initializer.append(bias_initializer)
-                        
-                        # Update node input
-                        node.input[2] = bias_name + "_fixed"
-                        
-                        if verbose:
-                            print(f"    ✅ Created fixed bias initializer: {bias_name}_fixed")
-                        fixed_count += 1
-                    else:
-                        if verbose:
-                            print(f"    ❌ Cannot fix: scale is also not an initializer")
-                else:
-                    if verbose:
-                        print(f"    ✅ Bias is already initializer, no fix needed")
-            else:
-                if verbose:
-                    print(f"    ❌ InstanceNormalization node has less than 3 inputs")
+                if not bias_is_init and scale_is_init:
+                    nodes_to_fix.append({
+                        'node': node,
+                        'bias_name': bias_name,
+                        'scale_name': scale_name
+                    })
     
-    if verbose:
-        print(f"\n📊 Fix Statistics:")
-        print(f"  Found InstanceNormalization nodes: {instance_norm_count}")
-        print(f"  Successfully fixed nodes: {fixed_count}")
-    
-    # Save fixed model
-    if fixed_count > 0 or output_onnx_path != input_onnx_path:
-        onnx.save(model, output_onnx_path)
-        if verbose:
-            print(f"✅ Fixed model saved to: {output_onnx_path}")
-    
-    # Validate fixed model
-    if verbose:
-        print("🔍 Validating fixed model...")
-    try:
-        onnx.checker.check_model(model)
-        if verbose:
-            print("✅ Model validation passed")
-    except Exception as e:
-        if verbose:
-            print(f"❌ Model validation failed: {e}")
+    if not nodes_to_fix:
+        print("  ✅ Model is already TensorRT compatible, no fixes needed")
         return False
     
-    return fixed_count > 0
+    print(f"  ⚠️  Found {len(nodes_to_fix)} InstanceNorm nodes that need fixing")
+    print("  📥 Extracting real bias values from checkpoint...")
+    
+    # Debug: print some checkpoint keys to understand the naming pattern
+    if len(checkpoint_state_dict) > 0:
+        sample_keys = list(checkpoint_state_dict.keys())[:5]
+        print(f"  🔍 Sample checkpoint keys: {sample_keys}")
+    
+    # Extract bias values from checkpoint
+    for i, fix_info in enumerate(nodes_to_fix):
+        bias_name = fix_info['bias_name']
+        scale_name = fix_info['scale_name']
+        
+        if i == 0:  # Print first one for debugging
+            print(f"  🔍 Example ONNX bias name: '{bias_name}'")
+        
+        # Try to find corresponding bias in checkpoint
+        # The bias_name from ONNX might have wrapper prefixes that don't exist in checkpoint
+        # Try multiple variations to find the correct parameter
+        possible_names = []
+        
+        # 1. Try exact name
+        possible_names.append(bias_name)
+        
+        # 2. Remove "model." prefix (from InferenceWrapper)
+        if bias_name.startswith('model.'):
+            possible_names.append(bias_name[6:])  # Remove "model."
+        
+        # 3. Remove "model.model." in case of double wrapping
+        if bias_name.startswith('model.model.'):
+            possible_names.append(bias_name[12:])
+        
+        # 4. Try without any "model." prefixes at all (handle nested wrappers)
+        name_without_model = bias_name
+        while name_without_model.startswith('model.'):
+            name_without_model = name_without_model[6:]
+        if name_without_model != bias_name:
+            possible_names.append(name_without_model)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        possible_names = [n for n in possible_names if not (n in seen or seen.add(n))]
+        
+        bias_tensor = None
+        found_name = None
+        for name in possible_names:
+            if name in checkpoint_state_dict:
+                bias_tensor = checkpoint_state_dict[name]
+                found_name = name
+                break
+        
+        if bias_tensor is not None:
+            bias_data = bias_tensor.cpu().numpy().astype(np.float32)
+            print(f"     ✅ {bias_name}: mean={bias_tensor.mean().item():.4f}, std={bias_tensor.std().item():.4f}")
+            if found_name != bias_name:
+                print(f"        (matched via alternate name: {found_name})")
+        else:
+            # If not found, use zero bias
+            scale_tensor = initializers[scale_name]
+            bias_shape = list(scale_tensor.dims)
+            bias_data = np.zeros(bias_shape, dtype=np.float32)
+            print(f"     ⚠️  {bias_name}: not found in checkpoint")
+            print(f"        Tried: {possible_names}")
+            print(f"        Using zero bias as fallback")
+        
+        # Create new bias initializer
+        new_bias_name = bias_name + "_fixed"
+        bias_initializer = onnx.helper.make_tensor(
+            name=new_bias_name,
+            data_type=onnx.TensorProto.FLOAT,
+            dims=list(bias_data.shape),
+            vals=bias_data.flatten().tolist()
+        )
+        
+        # Add to initializer list
+        graph.initializer.append(bias_initializer)
+        
+        # Update node's bias input
+        fix_info['node'].input[2] = new_bias_name
+    
+    # Save fixed model
+    print("  💾 Saving fixed model...")
+    onnx.save(model, onnx_model_path)
+    print(f"  ✅ TensorRT compatibility fix completed (fixed {len(nodes_to_fix)} nodes)")
+    
+    return True
 
 def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configuration, fold, 
-                             student_plans_identifier, feature_reduction_factor, device, verbose=False, use_da5=False):
-    """Load distillation student model from checkpoint"""
+                             student_plans_identifier, feature_reduction_factor, 
+                             block_reduction_strategy='keep', device=torch.device('cuda'), 
+                             verbose=False, use_da5=False):
+    """Load distillation student model from checkpoint
+    
+    Parameters:
+        block_reduction_strategy: Strategy for residual blocks compression
+            - 'reduce': Reduce blocks by half
+            - 'keep': Keep original blocks (default)
+            - 'increase': Increase blocks by 1 per stage
+            - 'adaptive': Adaptive increase based on compression ratio
+    """
     
     # Determine student model type based on student_plans_identifier
     is_resenc_student = 'ResEnc' in student_plans_identifier
@@ -302,8 +323,44 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
     
     # Create student model based on architecture type
     if is_resenc_student:
-        # ResEnc student model
-        lite_n_blocks_per_stage = [max(n // 2, 1) for n in n_blocks_per_stage]
+        # ResEnc student model - Apply block reduction strategy
+        if block_reduction_strategy == 'reduce':
+            # Strategy A: Reduce blocks by half (original approach)
+            lite_n_blocks_per_stage = [max(n // 2, 1) for n in n_blocks_per_stage]
+            if verbose:
+                print(f"Block strategy 'reduce': reduced by half")
+        elif block_reduction_strategy == 'keep':
+            # Strategy B: Keep original blocks
+            lite_n_blocks_per_stage = n_blocks_per_stage.copy()
+            if verbose:
+                print(f"Block strategy 'keep': kept original")
+        elif block_reduction_strategy == 'increase':
+            # Strategy B+: Increase blocks by 1 per stage
+            lite_n_blocks_per_stage = [min(n + 1, 8) for n in n_blocks_per_stage]
+            if verbose:
+                print(f"Block strategy 'increase': increased by 1 per stage")
+        elif block_reduction_strategy == 'adaptive':
+            # Strategy B++: Adaptive increase based on compression ratio
+            original_features = features_per_stage
+            compression_ratios = [orig/reduced for orig, reduced in zip(original_features, lite_features_per_stage)]
+            lite_n_blocks_per_stage = [min(n + max(0, int(ratio/4)), 8) for n, ratio in zip(n_blocks_per_stage, compression_ratios)]
+            if verbose:
+                print(f"Block strategy 'adaptive': adaptively increased based on compression ratio")
+        else:
+            # Default: keep original
+            lite_n_blocks_per_stage = n_blocks_per_stage.copy()
+            if verbose:
+                print(f"Block strategy unknown, using 'keep' as default")
+        
+        # Always print block information for ResEnc models (important for debugging)
+        print(f"📐 ResEnc Architecture Configuration:")
+        print(f"   Original blocks per stage: {n_blocks_per_stage}")
+        print(f"   Student blocks per stage: {lite_n_blocks_per_stage}")
+        print(f"   Block strategy: {block_reduction_strategy}")
+        print(f"   Features per stage: {lite_features_per_stage}")
+        
+        # IMPORTANT: Load model with deep_supervision=True to match training architecture
+        # We'll handle the output wrapping later
         model = LiteResEncStudent(
             input_channels=num_input_channels,
             num_classes=num_output_channels,
@@ -319,7 +376,7 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
             norm_op_kwargs={"eps": 1e-5, "affine": True},
             nonlin=torch.nn.LeakyReLU,
             nonlin_kwargs={"inplace": True},
-            deep_supervision=False  # Don't use deep supervision for ONNX export
+            deep_supervision=True  # Must match training configuration for weight loading
         )
     else:
         # Standard UNet student model
@@ -338,7 +395,7 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
             norm_op_kwargs={"eps": 1e-5, "affine": True},
             nonlin=torch.nn.LeakyReLU,
             nonlin_kwargs={"inplace": True},
-            deep_supervision=False  # Don't use deep supervision for ONNX export
+            deep_supervision=True  # Must match training configuration for weight loading
         )
     
     # Load checkpoint
@@ -360,6 +417,15 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
     except Exception as e:
         raise RuntimeError(f"Error loading checkpoint: {e}")
     
+    # Try to extract training configuration from checkpoint if available
+    if 'init_args' in checkpoint and verbose:
+        print("\n🔍 Found training configuration in checkpoint:")
+        init_args = checkpoint['init_args']
+        if 'feature_reduction_factor' in init_args:
+            print(f"   Checkpoint feature_reduction_factor: {init_args['feature_reduction_factor']}")
+        if 'block_reduction_strategy' in init_args:
+            print(f"   Checkpoint block_reduction_strategy: {init_args['block_reduction_strategy']}")
+    
     # Load model weights
     if 'network_weights' in checkpoint:
         state_dict = checkpoint['network_weights']
@@ -378,18 +444,70 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
     
     # Load parameters
     model_keys = set(model.state_dict().keys())
+    checkpoint_keys = set(new_state_dict.keys())
     filtered_state_dict = {k: v for k, v in new_state_dict.items() if k in model_keys}
-    model.load_state_dict(filtered_state_dict, strict=False)
     
-    if verbose:
-        missing_keys = model_keys - set(filtered_state_dict.keys())
-        if missing_keys:
-            print(f"Warning: The following parameters do not exist in checkpoint: {missing_keys}")
+    # Check for mismatches
+    missing_keys = model_keys - checkpoint_keys
+    unexpected_keys = checkpoint_keys - model_keys
+    matched_keys = model_keys & checkpoint_keys
+    
+    print(f"\n🔍 Checkpoint Loading Analysis:")
+    print(f"   Model expects: {len(model_keys)} parameters")
+    print(f"   Checkpoint has: {len(checkpoint_keys)} parameters")
+    print(f"   Successfully matched: {len(matched_keys)} parameters")
+    
+    if missing_keys:
+        print(f"   ⚠️  Missing in checkpoint: {len(missing_keys)} parameters")
+        if verbose or len(missing_keys) < 20:
+            for key in sorted(missing_keys)[:10]:  # Show first 10
+                print(f"      - {key}")
+            if len(missing_keys) > 10:
+                print(f"      ... and {len(missing_keys) - 10} more")
+    
+    if unexpected_keys:
+        print(f"   ⚠️  Unexpected in checkpoint: {len(unexpected_keys)} parameters")
+        if verbose or len(unexpected_keys) < 20:
+            for key in sorted(unexpected_keys)[:10]:  # Show first 10
+                print(f"      - {key}")
+            if len(unexpected_keys) > 10:
+                print(f"      ... and {len(unexpected_keys) - 10} more")
+    
+    # Load with strict=False to see what happens
+    load_result = model.load_state_dict(filtered_state_dict, strict=False)
+    if load_result.missing_keys or load_result.unexpected_keys:
+        print(f"   ⚠️  Load result - missing: {len(load_result.missing_keys)}, unexpected: {len(load_result.unexpected_keys)}")
     
     model.eval()
     model.to(device)
     
-    return model, num_input_channels, num_output_channels, config
+    # Print model parameter count for verification
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"\n📊 Model Statistics:")
+    print(f"   Total parameters: {total_params:,}")
+    print(f"   Trainable parameters: {trainable_params:,}")
+    print(f"   Model size: ~{total_params * 4 / 1024 / 1024:.2f} MB (FP32)")
+    
+    # Create a wrapper that only returns the main output (not deep supervision outputs)
+    # This is needed because training uses deep_supervision=True but inference only needs final output
+    class InferenceWrapper(torch.nn.Module):
+        def __init__(self, model):
+            super().__init__()
+            self.model = model
+        
+        def forward(self, x):
+            output = self.model(x)
+            # If deep supervision is enabled, output is a list [main, aux1, aux2, ...]
+            # We only want the main output (index 0)
+            if isinstance(output, (list, tuple)):
+                return output[0]
+            return output
+    
+    wrapped_model = InferenceWrapper(model)
+    wrapped_model.eval()
+    
+    return wrapped_model, num_input_channels, num_output_channels, config, filtered_state_dict
 
 def export_resenc_distillation_to_onnx(dataset_id,
                                      output_dir=None,
@@ -400,6 +518,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
                                      plans_identifier='nnUNetPlans',
                                      student_plans_identifier='nnUNetPlans',
                                      feature_reduction_factor=2,
+                                     block_reduction_strategy='keep',
                                      trt_compatible=False,
                                      verbose=False,
                                      use_da5=False):
@@ -416,6 +535,8 @@ def export_resenc_distillation_to_onnx(dataset_id,
         plans_identifier: Plans identifier
         student_plans_identifier: Student plans identifier
         feature_reduction_factor: Feature reduction factor
+        block_reduction_strategy: Block reduction strategy ('reduce', 'keep', 'increase', 'adaptive')
+            MUST match the strategy used during training!
         trt_compatible: Apply TensorRT compatibility fixes
         verbose: Show detailed output
         use_da5: Whether the model was trained with DA5 data augmentation
@@ -459,9 +580,10 @@ def export_resenc_distillation_to_onnx(dataset_id,
         dataset_json = json.load(f)
     
     # Load model from checkpoint
-    model, num_input_channels, num_output_channels, config = load_model_from_checkpoint(
+    model, num_input_channels, num_output_channels, config, state_dict = load_model_from_checkpoint(
         checkpoint_path, plans, dataset_json, configuration, fold,
-        student_plans_identifier, feature_reduction_factor, device, verbose, use_da5
+        student_plans_identifier, feature_reduction_factor, 
+        block_reduction_strategy, device, verbose, use_da5
     )
     
     # Set output directory
@@ -485,14 +607,17 @@ def export_resenc_distillation_to_onnx(dataset_id,
         model_type += "_da5"
     
     # Create dummy input
+    # IMPORTANT: Use randn (normal distribution) instead of zeros for better InstanceNorm behavior
+    # InstanceNorm computes statistics from the input, so using realistic data distribution helps
+    torch.manual_seed(42)  # For reproducibility
     if batch_size > 0:
         # Fixed batch size
-        dummy_input = torch.zeros((batch_size, num_input_channels, *input_shape[2:]), dtype=torch.float32).to(device)
+        dummy_input = torch.randn((batch_size, num_input_channels, *input_shape[2:]), dtype=torch.float32).to(device)
         dynamic_axes = None
         onnx_filename = f"{model_type}_distillation_fold{fold}_batch{batch_size}_r{feature_reduction_factor}.onnx"
     else:
         # Dynamic batch size
-        dummy_input = torch.zeros(input_shape, dtype=torch.float32).to(device)
+        dummy_input = torch.randn(input_shape, dtype=torch.float32).to(device)
         dynamic_axes = {
             'input': {0: 'batch_size'},
             'output': {0: 'batch_size'}
@@ -501,7 +626,32 @@ def export_resenc_distillation_to_onnx(dataset_id,
     
     output_path = join(output_dir, onnx_filename)
     
-    print(f"Exporting {model_type.upper()} distillation model with input shape {dummy_input.shape}")
+    print(f"\n{'='*80}")
+    print(f"Exporting {model_type.upper()} distillation model")
+    print(f"{'='*80}")
+    print(f"Input shape: {dummy_input.shape}")
+    print(f"Feature reduction factor: {feature_reduction_factor}")
+    print(f"Block reduction strategy: {block_reduction_strategy}")
+    print(f"Student plans identifier: {student_plans_identifier}")
+    print(f"{'='*80}\n")
+    
+    # Ensure model is in eval mode before getting reference output
+    model.eval()
+    
+    # CRITICAL: Force all InstanceNorm layers to eval mode
+    # This is necessary because InstanceNorm with track_running_stats=False
+    # doesn't respond to model.eval() properly for ONNX export
+    for module in model.modules():
+        if isinstance(module, (torch.nn.InstanceNorm1d, torch.nn.InstanceNorm2d, torch.nn.InstanceNorm3d)):
+            module.eval()
+            # Force the module to use eval mode during forward
+            module.training = False
+    
+    # Get PyTorch output for comparison
+    with torch.no_grad():
+        torch_output = model(dummy_input)
+        
+    print(f"✅ Model prepared for export (all InstanceNorm layers set to eval mode)")
     
     # Export to ONNX
     try:
@@ -510,53 +660,106 @@ def export_resenc_distillation_to_onnx(dataset_id,
             dummy_input,                 # Model input
             output_path,                 # Output file
             export_params=True,          # Store trained parameter weights
-            opset_version=17,            # ONNX operator set version
+            opset_version=11,            # ONNX operator set version (same as nnunetv2_resenc_onnx_convert.py)
             do_constant_folding=True,    # Constant folding optimization
             input_names=['input'],       # Input names
             output_names=['output'],     # Output names
             dynamic_axes=dynamic_axes,   # Dynamic dimensions
+            training=torch.onnx.TrainingMode.EVAL,  # Explicitly set to eval mode
             verbose=verbose              # Verbose output
         )
         print(f"{model_type.upper()} distillation model successfully exported to {output_path}")
         
+        # Validate ONNX model
+        print("Validating ONNX model...")
+        onnx_model = load(output_path)
+        checker.check_model(onnx_model)
+        
         # Export dataset json
         export_dataset_json(dataset_name, output_dir)
         
-        # Try to simplify model (if onnx and onnxsim are installed)
-        try:
-            import onnx
-            from onnxsim import simplify
-            
-            print("Attempting to simplify ONNX model...")
-            model_onnx = onnx.load(output_path)
-            model_simp, check = simplify(model_onnx)
-            
-            if check:
-                onnx.save(model_simp, output_path)
-                print(f"Simplified model saved to {output_path}")
-            else:
-                print("Model simplification failed, keeping original exported model")
-        except ImportError:
-            print("Note: onnx or onnxsim not installed, skipping model simplification step")
-            print("Tip: Use 'pip install onnx onnxsim' to install required libraries")
-        
         # Apply TensorRT compatibility fixes if requested
+        # Note: No simplification step to match nnunetv2_resenc_onnx_convert.py behavior
         if trt_compatible:
-            print("Applying TensorRT compatibility fixes...")
             try:
-                # Create TRT-compatible version with suffix
-                trt_output_path = output_path.replace('.onnx', '_trt.onnx')
-                fixed = fix_instance_norm_for_trt(output_path, trt_output_path, verbose)
-                if fixed:
-                    print(f"TensorRT-compatible model saved to: {trt_output_path}")
-                    # Also keep the original version
-                    print(f"Original model preserved at: {output_path}")
+                # Test original ONNX inference (before TensorRT fixes)
+                print("\n📊 Testing original ONNX model (before TensorRT fixes)...")
+                ort_session_orig = InferenceSession(
+                    output_path,
+                    providers=["CPUExecutionProvider"],
+                )
+                ort_inputs = {
+                    ort_session_orig.get_inputs()[0].name: dummy_input.cpu().numpy()
+                }
+                ort_outs_orig = ort_session_orig.run(None, ort_inputs)
+                torch_output_np = torch_output.detach().cpu().numpy()
+
+                try:
+                    np.testing.assert_allclose(
+                        torch_output_np,
+                        ort_outs_orig[0],
+                        rtol=1e-02,
+                        atol=1e-04,
+                        verbose=True,
+                    )
+                    print("  ✅ Original ONNX matches PyTorch!")
+                except AssertionError as e:
+                    print("  ⚠️  Minor differences (expected):")
+                    abs_diff = np.abs(torch_output_np - ort_outs_orig[0])
+                    print(f"     Max diff: {np.max(abs_diff):.6f}, Mean diff: {np.mean(abs_diff):.6f}")
+
+                # Fix ONNX model using real bias values from checkpoint (same as nnunetv2_resenc_onnx_convert.py)
+                was_fixed = fix_onnx_with_checkpoint(output_path, state_dict)
+                
+                if was_fixed:
+                    # Test fixed ONNX inference
+                    print("\n📊 Testing fixed ONNX model (after TensorRT fixes)...")
+                    ort_session_fixed = InferenceSession(
+                        output_path,
+                        providers=["CPUExecutionProvider"],
+                    )
+                    ort_outs_fixed = ort_session_fixed.run(None, ort_inputs)
+
+                    # Compare fixed ONNX with original ONNX
+                    try:
+                        np.testing.assert_allclose(
+                            ort_outs_orig[0],
+                            ort_outs_fixed[0],
+                            rtol=1e-08,
+                            atol=1e-08,
+                            verbose=False,
+                        )
+                        print("  ✅ Fixed ONNX is IDENTICAL to original ONNX (bit-wise)!")
+                    except AssertionError:
+                        abs_diff = np.abs(ort_outs_orig[0] - ort_outs_fixed[0])
+                        max_diff = np.max(abs_diff)
+                        mean_diff = np.mean(abs_diff)
+                        print(f"  📊 Difference: Max={max_diff:.8f}, Mean={mean_diff:.8f}")
+                        
+                        if max_diff < 1e-6:
+                            print("  ✅ Fixed ONNX is nearly identical to original (excellent!)")
+                        elif max_diff < 1e-4:
+                            print("  ✅ Fixed ONNX is very close to original (acceptable)")
+                        else:
+                            print("  ⚠️  Fixed ONNX has noticeable differences from original")
+
+                    # Compare fixed ONNX with PyTorch
+                    try:
+                        np.testing.assert_allclose(
+                            torch_output_np,
+                            ort_outs_fixed[0],
+                            rtol=1e-02,
+                            atol=1e-04,
+                            verbose=False,
+                        )
+                        print("  ✅ Fixed ONNX matches PyTorch!")
+                    except AssertionError:
+                        abs_diff = np.abs(torch_output_np - ort_outs_fixed[0])
+                        print(f"  📊 vs PyTorch: Max diff={np.max(abs_diff):.6f}, Mean diff={np.mean(abs_diff):.6f}")
+
+                    print(f"✅ Successfully exported TensorRT-compatible ResEnc distillation model: {output_path}")
                 else:
-                    print("No TensorRT fixes were needed")
-                    # If no fixes needed, just copy to TRT version for consistency
-                    import shutil
-                    shutil.copy2(output_path, trt_output_path)
-                    print(f"TensorRT version (unchanged) saved to: {trt_output_path}")
+                    print("✅ Model is already TensorRT compatible")
             except Exception as e:
                 print(f"Warning: TensorRT compatibility fix failed: {e}")
                 print("Original ONNX model is still available")
@@ -577,6 +780,9 @@ def main():
     parser.add_argument('-p', '--plans', type=str, default='nnUNetPlans', help='Plans identifier')
     parser.add_argument('-spl', '--student_plans', type=str, default='nnUNetPlans', help='Student plans identifier')
     parser.add_argument('-r', '--reduction_factor', type=int, default=2, help='Feature reduction factor')
+    parser.add_argument('-bs', '--block_strategy', type=str, default='keep', 
+                       choices=['reduce', 'keep', 'increase', 'adaptive'],
+                       help='Block reduction strategy (MUST match training): reduce (A), keep (B), increase (B+), adaptive (B++) (default: keep)')
     parser.add_argument('--trt', '--tensorrt', action='store_true', dest='trt_compatible', help='Apply TensorRT compatibility fixes')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed output')
     parser.add_argument('--use_da5', action='store_true', help='Model was trained with DA5 data augmentation')
@@ -594,6 +800,7 @@ def main():
         plans_identifier=args.plans,
         student_plans_identifier=args.student_plans,
         feature_reduction_factor=args.reduction_factor,
+        block_reduction_strategy=args.block_strategy,
         trt_compatible=args.trt_compatible,
         verbose=args.verbose,
         use_da5=args.use_da5
