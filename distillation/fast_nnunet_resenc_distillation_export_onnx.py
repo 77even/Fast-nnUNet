@@ -19,7 +19,7 @@
 
 ## Title: Fast-nnUNet: High-performance medical image segmentation framework based on the nnUNetv2 architecture
 ## Authors: Justin Lee
-## Description: Export ResEnc distillation models to ONNX format
+## Description: Export Fast-nnUNet ResEnc distillation models to ONNX format
 
 import argparse
 import os
@@ -483,6 +483,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
                                      feature_reduction_factor=2,
                                      block_reduction_strategy='keep',
                                      fix_instancenorm=False,
+                                     simplify_onnx=False,
                                      verbose=False,
                                      use_da5=False):
     """
@@ -680,6 +681,51 @@ def export_resenc_distillation_to_onnx(dataset_id,
                     print(f"\n✅ Fast-nnUNet ResEnc distillation model converted to ONNX successfully!")
                 else:
                     print("   ℹ️  No InstanceNorm bias fixes needed")
+                    
+                # Optional: Simplify ONNX model
+                if simplify_onnx:
+                    try:
+                        from onnxsim import simplify
+                        print("\n🔧 Simplifying ONNX model...")
+                        
+                        # Load current ONNX model
+                        import onnx
+                        onnx_model = onnx.load(output_path)
+                        model_simp, check = simplify(onnx_model)
+                        
+                        if check:
+                            # Save simplified model
+                            onnx.save(model_simp, output_path)
+                            
+                            # Re-test simplified model
+                            ort_session_simp = InferenceSession(output_path, providers=["CPUExecutionProvider"])
+                            ort_outputs_simp = ort_session_simp.run(None, ort_inputs)
+                            
+                            abs_diff_simp = np.abs(torch_output_np - ort_outputs_simp[0])
+                            max_diff_simp = np.max(abs_diff_simp)
+                            mean_diff_simp = np.mean(abs_diff_simp)
+                            
+                            print(f"   ✅ Fast nnUNet ResEnc distillation model simplified successfully!")
+                            print(f"   📊 Simplified vs PyTorch: max={max_diff_simp:.6f}, mean={mean_diff_simp:.6f}")
+                            
+                            # Compare with original
+                            if was_fixed:
+                                orig_max_diff = np.max(abs_diff_pytorch)
+                                if max_diff_simp > orig_max_diff * 2:
+                                    print(f"   ⚠️  Warning: Simplification increased difference significantly!")
+                            else:
+                                if max_diff_simp > max_diff * 2:
+                                    print(f"   ⚠️  Warning: Simplification increased difference significantly!")
+                        else:
+                            print("   ⚠️  Simplification check failed, keeping original")
+                            
+                    except ImportError:
+                        print("\n⚠️  onnx-simplifier not installed, skipping simplification")
+                        print("Tip: pip install onnx-simplifier")
+                    except Exception as e:
+                        print(f"\n⚠️  Simplification failed: {e}")
+                        print("Keeping original ONNX model")
+                        
             except Exception as e:
                 print(f"Warning: InstanceNorm bias fix failed: {e}")
                 print("Original ONNX model is still available")
@@ -690,7 +736,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
         raise
 
 def main():
-    parser = argparse.ArgumentParser(description='Export ResEnc distillation model to ONNX format')
+    parser = argparse.ArgumentParser(description='Export Fast nnUNet ResEnc distillation model to ONNX format')
     parser.add_argument('-d', '--dataset_id', type=str, required=True, help='Dataset ID')
     parser.add_argument('-o', '--output_dir', type=str, help='Output directory')
     parser.add_argument('-c', '--configuration', type=str, default='3d_fullres', help='Configuration name')
@@ -703,9 +749,10 @@ def main():
     parser.add_argument('-bs', '--block_strategy', type=str, default='keep', 
                        choices=['reduce', 'keep', 'increase', 'adaptive'],
                        help='Block reduction strategy (MUST match training): reduce (A), keep (B), increase (B+), adaptive (B++) (default: keep)')
-    parser.add_argument('--fix', '--fix_instancenorm', action='store_true', dest='fix_instancenorm', help='Apply InstanceNorm bias fixes')
+    parser.add_argument('-fix', '--fix_instancenorm', action='store_true', dest='fix_instancenorm', help='Apply InstanceNorm bias fixes')
+    parser.add_argument('-sim', '--simplify', action='store_true', dest='simplify_onnx', help='Simplify ONNX model (may increase numerical difference)')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed output')
-    parser.add_argument('--use_da5', action='store_true', help='Model was trained with DA5 data augmentation')
+    parser.add_argument('-da5', '--use_da5', action='store_true', help='Model was trained with DA5 data augmentation')
     
     args = parser.parse_args()
     
@@ -722,6 +769,7 @@ def main():
         feature_reduction_factor=args.reduction_factor,
         block_reduction_strategy=args.block_strategy,
         fix_instancenorm=args.fix_instancenorm,
+        simplify_onnx=args.simplify_onnx,
         verbose=args.verbose,
         use_da5=args.use_da5
     )

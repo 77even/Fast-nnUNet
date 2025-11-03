@@ -15,7 +15,7 @@
 
 ## Title: Fast-nnUNet: High-performance medical image segmentation framework based on the nnUNetv2 architecture
 ## Authors: Justin Lee
-## Description: Convet nnUNet models to ONNX models
+## Description: Convet Fast-nnUNet distillation models to ONNX models
 
 import os
 import sys
@@ -63,6 +63,7 @@ def export_to_onnx(dataset_id,
                    dynamic_axes=True,
                    input_shape=None,
                    nnunet_style=False,
+                   simplify_onnx=False,
                    verbose=False,
                    use_da5=False):
     """
@@ -260,7 +261,7 @@ def export_to_onnx(dataset_id,
             norm_op_kwargs={"eps": 1e-5, "affine": True},
             nonlin=torch.nn.LeakyReLU,
             nonlin_kwargs={"inplace": True},
-            deep_supervision=False  # Don't use deep supervision for ONNX export
+            deep_supervision=True  # Must match training configuration
         )
     elif 'network_config' in checkpoint and 'network' in checkpoint['network_config']:
         network_config = checkpoint['network_config']['network']
@@ -285,7 +286,7 @@ def export_to_onnx(dataset_id,
             norm_op_kwargs={"eps": 1e-5, "affine": True},
             nonlin=torch.nn.LeakyReLU,
             nonlin_kwargs={"inplace": True},
-            deep_supervision=False  # Don't use deep supervision for ONNX export
+            deep_supervision=True  # Must match training configuration
         )
     else:
         # If no network configuration in checkpoint, build manually
@@ -305,7 +306,7 @@ def export_to_onnx(dataset_id,
             norm_op_kwargs={"eps": 1e-5, "affine": True},
             nonlin=torch.nn.LeakyReLU,
             nonlin_kwargs={"inplace": True},
-            deep_supervision=False  # Don't use deep supervision for ONNX export
+            deep_supervision=True  # Must match training configuration
         )
     
     # Load network parameters
@@ -361,6 +362,28 @@ def export_to_onnx(dataset_id,
     model.eval()
     model.to(device)
     
+    # Print model statistics
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"📊 Model: {total_params:,} params (~{total_params * 4 / 1024 / 1024:.1f} MB)")
+    
+    # Create a wrapper that only returns the main output (not deep supervision outputs)
+    class InferenceWrapper(torch.nn.Module):
+        def __init__(self, model):
+            super().__init__()
+            self.model = model
+        
+        def forward(self, x):
+            output = self.model(x)
+            # If deep supervision is enabled, output is a list [main, aux1, aux2, ...]
+            # We only want the main output (index 0)
+            if isinstance(output, (list, tuple)):
+                return output[0]
+            return output
+    
+    wrapped_model = InferenceWrapper(model)
+    wrapped_model.eval()
+    model = wrapped_model  # Replace model with wrapped version
+    
     # Prepare export path
     if output_path is None:
         output_dir = join(model_folder_fold, "exported_models")
@@ -400,9 +423,11 @@ def export_to_onnx(dataset_id,
         
         print(f"Using single channel fixed size mode, input shape: {input_shape}")
     
-    dummy_input = torch.zeros(input_shape, dtype=torch.float32).to(device)
+    # Use randn instead of zeros for better InstanceNorm behavior
+    torch.manual_seed(42)  # For reproducibility
+    dummy_input = torch.randn(input_shape, dtype=torch.float32).to(device)
     
-    print(f"Exporting model with input shape {input_shape}")
+    print(f"🔄 Exporting to ONNX (input: {input_shape})...")
     
     # Set dynamic axes for ONNX export
     if dynamic_axes and not nnunet_style:
@@ -420,6 +445,16 @@ def export_to_onnx(dataset_id,
     else:
         dynamic_axes_dict = None
     
+    # Force all InstanceNorm layers to eval mode
+    for module in model.modules():
+        if isinstance(module, (torch.nn.InstanceNorm1d, torch.nn.InstanceNorm2d, torch.nn.InstanceNorm3d)):
+            module.eval()
+            module.training = False
+    
+    # Get PyTorch output for validation
+    with torch.no_grad():
+        torch_output = model(dummy_input)
+    
     # Export to ONNX
     try:
         torch.onnx.export(
@@ -432,27 +467,83 @@ def export_to_onnx(dataset_id,
             input_names=['input'],       # Input names
             output_names=['output'],     # Output names
             dynamic_axes=dynamic_axes_dict,  # Dynamic dimensions
+            training=torch.onnx.TrainingMode.EVAL,  # Explicitly set to eval mode
             verbose=verbose              # Verbose output
         )
-        print(f"Model successfully exported to {output_path}")
+        print(f"✅ Exported to: {output_path}")
         
-        # Try to simplify model (if onnx and onnxsim are installed)
+        # Validate ONNX model
         try:
             import onnx
-            from onnxsim import simplify
+            from onnx import checker
+            from onnxruntime import InferenceSession
             
-            print("Attempting to simplify ONNX model...")
-            model_onnx = onnx.load(output_path)
-            model_simp, check = simplify(model_onnx)
+            print("\n📊 Validating ONNX output...")
             
-            if check:
-                onnx.save(model_simp, output_path)
-                print(f"Simplified model saved to {output_path}")
+            # Load and check ONNX model
+            onnx_model = onnx.load(output_path)
+            checker.check_model(onnx_model)
+            
+            # Test ONNX inference
+            ort_session = InferenceSession(output_path, providers=["CPUExecutionProvider"])
+            ort_inputs = {ort_session.get_inputs()[0].name: dummy_input.cpu().numpy()}
+            ort_outputs = ort_session.run(None, ort_inputs)
+            
+            # Compare with PyTorch output
+            torch_output_np = torch_output.detach().cpu().numpy()
+            abs_diff = np.abs(torch_output_np - ort_outputs[0])
+            max_diff = np.max(abs_diff)
+            mean_diff = np.mean(abs_diff)
+            
+            if max_diff < 0.01:
+                print(f"   ✅ Excellent match (max={max_diff:.6f}, mean={mean_diff:.6f})")
+            elif max_diff < 0.5:
+                print(f"   ✅ Good match (max={max_diff:.6f}, mean={mean_diff:.6f})")
             else:
-                print("Model simplification failed, keeping original exported model")
-        except ImportError:
-            print("Note: onnx or onnxsim not installed, skipping model simplification step")
-            print("Tip: Use 'pip install onnx onnxsim' to install required libraries")
+                print(f"   ⚠️  Difference detected (max={max_diff:.6f}, mean={mean_diff:.6f})")
+            
+            print(f"\n✅ Fast-nnUNet distillation model converted to ONNX successfully!")
+            
+            # Optional: Simplify ONNX model
+            if simplify_onnx:
+                try:
+                    from onnxsim import simplify
+                    print("\n🔧 Simplifying ONNX model...")
+                    
+                    model_simp, check = simplify(onnx_model)
+                    if check:
+                        # Validate simplified model
+                        onnx.save(model_simp, output_path)
+                        
+                        # Re-test simplified model
+                        ort_session_simp = InferenceSession(output_path, providers=["CPUExecutionProvider"])
+                        ort_outputs_simp = ort_session_simp.run(None, ort_inputs)
+                        
+                        abs_diff_simp = np.abs(torch_output_np - ort_outputs_simp[0])
+                        max_diff_simp = np.max(abs_diff_simp)
+                        mean_diff_simp = np.mean(abs_diff_simp)
+                        
+                        print(f"   ✅ Fast nnUNet distillation model simplified successfully!")
+                        print(f"   📊 Simplified vs PyTorch: max={max_diff_simp:.6f}, mean={mean_diff_simp:.6f}")
+                        
+                        if max_diff_simp > max_diff * 2:
+                            print(f"   ⚠️  Warning: Simplification increased difference significantly!")
+                    else:
+                        print("   ⚠️  Simplification check failed, keeping original")
+                        
+                except ImportError:
+                    print("\n⚠️  onnx-simplifier not installed, skipping simplification")
+                    print("Tip: pip install onnx-simplifier")
+                except Exception as e:
+                    print(f"\n⚠️  Simplification failed: {e}")
+                    print("Keeping original ONNX model")
+            
+        except ImportError as e:
+            print(f"\n⚠️  Validation skipped: {e}")
+            print("Tip: Install onnx and onnxruntime to enable validation")
+        except Exception as e:
+            print(f"\n⚠️  Validation failed: {e}")
+            print("ONNX model exported but validation encountered an error")
         
         return output_path
     except Exception as e:
@@ -460,7 +551,7 @@ def export_to_onnx(dataset_id,
         raise
 
 def main():
-    parser = argparse.ArgumentParser(description='Export nnUNet distillation student model to ONNX format')
+    parser = argparse.ArgumentParser(description='Export Fast nnUNet distillation student model to ONNX format')
     parser.add_argument('-d', '--dataset_id', type=str, required=True, help='Dataset ID (e.g., 776)')
     parser.add_argument('-c', '--configuration', type=str, default='3d_fullres', help='nnUNet configuration (default: 3d_fullres)')
     parser.add_argument('-f', '--fold', type=int, default=0, help='Model training fold number (default: 0)')
@@ -468,11 +559,12 @@ def main():
     parser.add_argument('-cp', '--checkpoint', type=str, default='checkpoint_final.pth', help='Checkpoint filename (default: checkpoint_final.pth)')
     parser.add_argument('-o', '--output', type=str, help='Output ONNX file path, if not specified will be auto-generated')
     parser.add_argument('-d_device', '--device', type=str, help='Device to use, e.g., "cuda:0"')
-    parser.add_argument('--static', action='store_false', dest='dynamic_axes', help='Use static input shape instead of dynamic shape')
-    parser.add_argument('--input_shape', type=int, nargs='+', help='Custom input shape (b c x y z)')
-    parser.add_argument('--nnunet_format', action='store_true', dest='single_channel_fixed_size', help='导出单通道固定尺寸模型 [batch_size, 1, 固定尺寸]')
+    parser.add_argument('-da', '--dynamic_axes', action='store_false', dest='dynamic_axes', help='Use static input shape instead of dynamic shape')
+    parser.add_argument('-is', '--input_shape', type=int, nargs='+', help='Custom input shape (b c x y z)')
+    parser.add_argument('-nn', '--nnunet_format', action='store_true', dest='single_channel_fixed_size', help='Export single channel fixed size model [batch_size, 1, fixed size]')
+    parser.add_argument('-sim', '--simplify', action='store_true', dest='simplify_onnx', help='Simplify ONNX model (may increase numerical difference)')
     parser.add_argument('-v', '--verbose', action='store_true', help='Display detailed information')
-    parser.add_argument('--use_da5', action='store_true', help='Model was trained with DA5 data augmentation')
+    parser.add_argument('-da5', '--use_da5', action='store_true', help='Model was trained with DA5 data augmentation')
     
     args = parser.parse_args()
     
@@ -495,6 +587,7 @@ def main():
         dynamic_axes=args.dynamic_axes,
         input_shape=input_shape,
         nnunet_style=args.nnunet_format,
+        simplify_onnx=args.simplify_onnx,
         verbose=args.verbose,
         use_da5=args.use_da5
     )
