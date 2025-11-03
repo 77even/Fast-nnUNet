@@ -203,20 +203,23 @@ nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -v
 # Specify output path
 nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -o /path/to/output.onnx
 
-# Export with static input shape
-nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --static
+# Export with daynmic input shape
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -da
 
 # Export with custom input shape
-nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --input_shape 1 1 128 128 128
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -is 1 1 128 128 128
 
 # Export in nnUNet format (single channel, fixed size)
-nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --nnunet_format
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -nn
 
 # Export DA5-trained model
-nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --use_da5
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -da5
 
 # Export DA5-trained model with verbose output
-nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --use_da5 -v
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -da5 -v
+
+# Export with simplified ONNX
+nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -sim
 ```
 
 #### ResEnc Distillation Model Export
@@ -238,16 +241,19 @@ nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -spl nnUNetResE
 nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -b 1
 
 # ResEnc export with TensorRT compatibility
-nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --trt
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -fix
 
 # ResEnc export with custom plans identifier
 nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -p nnUNetResEncUNetLPlans
 
 # ResEnc export for DA5-trained model
-nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --use_da5
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -da5
 
 # ResEnc export for DA5-trained model with TensorRT compatibility
-nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 --use_da5 --trt
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -da5 -fix
+
+# ResEnc export with simplified ONNX
+nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -sim
 ```
 
 Parameter description:
@@ -256,14 +262,15 @@ Parameter description:
 - `-r, --reduction_factor`: Feature reduction factor, must be consistent with training
 - `-o, --output`: Output ONNX file path (standard) or output directory (ResEnc)
 - `-v, --verbose`: Display detailed information
-- `--static`: Use static input shape (default uses dynamic shape)
-- `--input_shape`: Custom input shape (b c x y z) - standard export only
-- `--nnunet_format`: Export single channel fixed size model - standard export only
+- `-da`: Use dynamic input shape (default uses static shape)
+- `-is`: Custom input shape (b c x y z) - standard export only
+- `-nn`: Export single channel fixed size model - standard export only
 - `-spl, --student_plans`: Student model plans identifier - ResEnc export only
 - `-b, --batch_size`: Batch size, 0 means dynamic - ResEnc export only
 - `--trt`: Apply TensorRT compatibility fixes - ResEnc export only
 - `-p, --plans`: Plans identifier - ResEnc export only
-- `--use_da5`: Model was trained with DA5 data augmentation (both standard and ResEnc export)
+- `-da5`: Model was trained with DA5 data augmentation (both standard and ResEnc export)
+- `-sim`: Simplify ONNX model
 
 ## Parameter Tuning Recommendations
 
