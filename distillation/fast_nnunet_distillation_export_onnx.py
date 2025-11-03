@@ -510,10 +510,17 @@ def export_to_onnx(dataset_id,
                     from onnxsim import simplify
                     print("\n🔧 Simplifying ONNX model...")
                     
+                    # Get original model size
+                    original_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+                    
                     model_simp, check = simplify(onnx_model)
                     if check:
-                        # Validate simplified model
+                        # Save simplified model
                         onnx.save(model_simp, output_path)
+                        
+                        # Get simplified model size
+                        simplified_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+                        size_diff = simplified_size - original_size
                         
                         # Re-test simplified model
                         ort_session_simp = InferenceSession(output_path, providers=["CPUExecutionProvider"])
@@ -524,6 +531,7 @@ def export_to_onnx(dataset_id,
                         mean_diff_simp = np.mean(abs_diff_simp)
                         
                         print(f"   ✅ Fast nnUNet distillation model simplified successfully!")
+                        print(f"   📦 Size: {original_size:.2f} MB → {simplified_size:.2f} MB ({size_diff:+.2f} MB)")
                         print(f"   📊 Simplified vs PyTorch: max={max_diff_simp:.6f}, mean={mean_diff_simp:.6f}")
                         
                         if max_diff_simp > max_diff * 2:

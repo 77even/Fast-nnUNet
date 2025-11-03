@@ -686,16 +686,23 @@ def export_resenc_distillation_to_onnx(dataset_id,
                 if simplify_onnx:
                     try:
                         from onnxsim import simplify
+                        import onnx
                         print("\n🔧 Simplifying ONNX model...")
                         
+                        # Get original model size
+                        original_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+                        
                         # Load current ONNX model
-                        import onnx
                         onnx_model = onnx.load(output_path)
                         model_simp, check = simplify(onnx_model)
                         
                         if check:
                             # Save simplified model
                             onnx.save(model_simp, output_path)
+                            
+                            # Get simplified model size
+                            simplified_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+                            size_diff = simplified_size - original_size
                             
                             # Re-test simplified model
                             ort_session_simp = InferenceSession(output_path, providers=["CPUExecutionProvider"])
@@ -706,6 +713,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
                             mean_diff_simp = np.mean(abs_diff_simp)
                             
                             print(f"   ✅ Fast nnUNet ResEnc distillation model simplified successfully!")
+                            print(f"   📦 Size: {original_size:.2f} MB → {simplified_size:.2f} MB ({size_diff:+.2f} MB)")
                             print(f"   📊 Simplified vs PyTorch: max={max_diff_simp:.6f}, mean={mean_diff_simp:.6f}")
                             
                             # Compare with original
