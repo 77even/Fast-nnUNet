@@ -283,7 +283,7 @@ def main():
     run_distillation_training(
         dataset_id=args.dataset_id,
         configuration=args.configuration,
-        fold=args.fold,
+        fold=args.start_fold,
         teacher_model_folder=args.teacher_model_folder,
         teacher_folds=args.teacher_folds,
         teacher_checkpoint_name=args.teacher_checkpoint,
