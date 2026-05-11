@@ -829,32 +829,31 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             
             # Total loss = Segmentation loss * (1-alpha) + Distillation loss * alpha
             total_loss = seg_loss * (1 - self.alpha) + distill_loss * self.alpha
-            
-            # Use gradient scaler for backpropagation
-            if self.grad_scaler is not None:
-                self.grad_scaler.scale(total_loss).backward()
-                self.grad_scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
-                self.grad_scaler.step(self.optimizer)
-                self.grad_scaler.update()
-            else:
-                total_loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
-                self.optimizer.step()
-            
-            # Record loss
-            if self.logger is not None:
-                # If list does not exist, create it first
-                if 'train_seg_losses' not in self.logger.my_fantastic_logging:
-                    self.logger.my_fantastic_logging['train_seg_losses'] = []
-                if 'train_distill_losses' not in self.logger.my_fantastic_logging:
-                    self.logger.my_fantastic_logging['train_distill_losses'] = []
-                
-                self.logger.my_fantastic_logging['train_seg_losses'].append(seg_loss.detach().cpu().numpy())
-                self.logger.my_fantastic_logging['train_distill_losses'].append(distill_loss.detach().cpu().numpy())
-            
-            # Return parent class expected format
-            return {'loss': total_loss.detach().cpu().numpy()}
+
+        # Backward pass / optimizer step must run outside the autocast context
+        if self.grad_scaler is not None:
+            self.grad_scaler.scale(total_loss).backward()
+            self.grad_scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+            self.grad_scaler.step(self.optimizer)
+            self.grad_scaler.update()
+        else:
+            total_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+            self.optimizer.step()
+
+        # Record loss
+        if self.logger is not None:
+            if 'train_seg_losses' not in self.logger.my_fantastic_logging:
+                self.logger.my_fantastic_logging['train_seg_losses'] = []
+            if 'train_distill_losses' not in self.logger.my_fantastic_logging:
+                self.logger.my_fantastic_logging['train_distill_losses'] = []
+
+            self.logger.my_fantastic_logging['train_seg_losses'].append(seg_loss.detach().cpu().numpy())
+            self.logger.my_fantastic_logging['train_distill_losses'].append(distill_loss.detach().cpu().numpy())
+
+        # Return parent class expected format
+        return {'loss': total_loss.detach().cpu().numpy()}
 
     def validation_step(self, batch: dict) -> dict:
         """Validation step, compatible with student model without deep supervision output"""

@@ -26,8 +26,7 @@ import os
 import sys
 import torch
 import json
-import inspect
-from batchgenerators.utilities.file_and_folder_operations import maybe_mkdir_p, join
+from batchgenerators.utilities.file_and_folder_operations import join
 
 # Ensure using nnunetv2 from current directory
 nnunet_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
@@ -271,8 +270,8 @@ def main():
     parser.add_argument('-disable_mirroring', '--disable_val_mirroring', action='store_true', help='Disable mirroring during validation')
     parser.add_argument('-rotate_folds', '--rotate_training_folds', action='store_true', 
                        help='Enable rotating training folds periodically')
-    parser.add_argument('-rotate_freq', '--rotate_folds_frequency', type=int, default=400, 
-                       help='How often to rotate folds (in epochs) (default: 5)')
+    parser.add_argument('-rotate_freq', '--rotate_folds_frequency', type=int, default=400,
+                       help='How often to rotate folds (in epochs) (default: 400)')
     parser.add_argument('-e', '--epochs', type=int, default=1000, help='Maximum number of training epochs (default: 1000)')
     parser.add_argument('--use_da5', action='store_true', help='Use DA5 strong data augmentation (recommended for small datasets)')
     

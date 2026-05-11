@@ -26,8 +26,7 @@ import os
 import sys
 import torch
 import json
-import inspect
-from batchgenerators.utilities.file_and_folder_operations import maybe_mkdir_p, join
+from batchgenerators.utilities.file_and_folder_operations import join
 
 # Ensure using nnunetv2 from current directory
 nnunet_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))

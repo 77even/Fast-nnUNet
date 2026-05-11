@@ -569,7 +569,7 @@ def main():
     parser.add_argument('-d_device', '--device', type=str, help='Device to use, e.g., "cuda:0"')
     parser.add_argument('-da', '--dynamic_axes', action='store_false', dest='dynamic_axes', help='Use static input shape instead of dynamic shape')
     parser.add_argument('-is', '--input_shape', type=int, nargs='+', help='Custom input shape (b c x y z)')
-    parser.add_argument('-nn', '--nnunet_format', action='store_true', dest='single_channel_fixed_size', help='Export single channel fixed size model [batch_size, 1, fixed size]')
+    parser.add_argument('-nn', '--nnunet_format', action='store_true', help='Export single channel fixed size model [batch_size, 1, fixed size]')
     parser.add_argument('-sim', '--simplify', action='store_true', dest='simplify_onnx', help='Simplify ONNX model (may increase numerical difference)')
     parser.add_argument('-v', '--verbose', action='store_true', help='Display detailed information')
     parser.add_argument('-da5', '--use_da5', action='store_true', help='Model was trained with DA5 data augmentation')
