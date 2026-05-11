@@ -275,7 +275,23 @@ Parameter description:
 
 ### 3. 📤 Export ONNX Model
 
-Export the trained student model to ONNX format for fast inference:
+Export the trained student model to ONNX format for fast inference.
+
+> **Prerequisites:** ONNX export depends on a few extra packages that are
+> not part of the core install. The easiest way is the `[onnx]` extra:
+>
+> ```bash
+> pip install -e '.[onnx]'   # quotes needed for zsh
+> ```
+>
+> Or install them manually:
+>
+> ```bash
+> pip install onnx onnxruntime onnxscript onnx-simplifier
+> ```
+>
+> `onnxscript` is required by PyTorch 2.6+ for the new ONNX exporter,
+> and `onnx-simplifier` is only needed when you pass `--simplify` / `-sim`.
 
 #### Standard Distillation Model Export
 

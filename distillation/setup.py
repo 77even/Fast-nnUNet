@@ -7,6 +7,16 @@ setup(
         "torch>=1.6.0",
         "nnunetv2>=2.5,<3.0",
     ],
+    extras_require={
+        # ONNX export deps. torch>=2.6 needs onnxscript for the new exporter;
+        # onnx-simplifier is only used when the user passes --simplify / -sim.
+        "onnx": [
+            "onnx",
+            "onnxruntime",
+            "onnxscript",
+            "onnx-simplifier",
+        ],
+    },
     entry_points={
         'console_scripts': [
             'nnUNetv2_distillation_train=fast_nnunet_distillation_train:main',
