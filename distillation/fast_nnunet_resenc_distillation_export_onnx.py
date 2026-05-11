@@ -36,17 +36,11 @@ from onnx import load, checker
 from onnxruntime import InferenceSession
 from torch.onnx import export as torch_onnx_export
 
-# Ensure using nnunetv2 from current directory
-nnunet_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, nnunet_dir)
-
-# Import paths from nnunetv2
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
-
-# Import nnUNetDistillationTrainer directly
-from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, nnUNetDistillationTrainerDA5, LiteNNUNetStudent, LiteResEncStudent
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+
+from nnunet_distillation_trainer import nnUNetDistillationTrainer, nnUNetDistillationTrainerDA5, LiteNNUNetStudent, LiteResEncStudent
 
 def get_dataset_name_from_id(dataset_id):
     """Get the complete dataset name from dataset ID"""

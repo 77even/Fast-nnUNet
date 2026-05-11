@@ -25,14 +25,10 @@ import json
 import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import join, isfile
 
-# Ensure using nnunetv2 from current directory
-nnunet_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, nnunet_dir)
-
-# Import paths and related functionalities from nnunetv2
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
-from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, nnUNetDistillationTrainerDA5, LiteNNUNetStudent
+
+from nnunet_distillation_trainer import nnUNetDistillationTrainer, nnUNetDistillationTrainerDA5, LiteNNUNetStudent
 
 def get_dataset_name_from_id(dataset_id):
     """Get the complete dataset name from dataset ID"""
