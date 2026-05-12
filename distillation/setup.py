@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="nnunetv2_distillation",
-    version="1.2.3",
+    version="1.2.4",
     packages=find_packages(),
     install_requires=[
         "torch>=1.6.0",
@@ -12,15 +12,20 @@ setup(
         'console_scripts': [
             'nnUNetv2_distillation_train=fast_nnunet_distillation_train:main',
             'nnUNetv2_resenc_distillation_train=fast_nnunet_resenc_distillation_train:main',
+            'nnUNetv2_primus_distillation_train=fast_nnunet_primus_distillation_train:main',
             'nnUNetv2_distillation_export_onnx=fast_nnunet_distillation_export_onnx:main',
             'nnUNetv2_resenc_distillation_export_onnx=fast_nnunet_resenc_distillation_export_onnx:main',
+            'nnUNetv2_primus_distillation_export_onnx=fast_nnunet_primus_distillation_export_onnx:main',
         ],
     },
     py_modules=[
         'fast_nnunet_distillation_train',
         'fast_nnunet_resenc_distillation_train',
+        'fast_nnunet_primus_distillation_train',
         'fast_nnunet_distillation_export_onnx',
-        'fast_nnunet_resenc_distillation_export_onnx'
+        'fast_nnunet_resenc_distillation_export_onnx',
+        'fast_nnunet_primus_distillation_export_onnx',
+        'primus_distillation_trainer',
     ],
     python_requires='>=3.7',
     author="Justin",

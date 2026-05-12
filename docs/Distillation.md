@@ -201,6 +201,59 @@ nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --us
 nnUNetv2_resenc_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 -tpl nnUNetResEncUNetLPlans -spl nnUNetResEncUNetMPlans --use_da5
 ```
 
+#### Primus Knowledge Distillation
+
+Distill an upstream nnUNetv2 Primus transformer teacher into a smaller Primus student. Primus
+is 3D-only and requires `patch_size` divisible by 8.
+
+Four teacher sizes are supported (select with `-ts / --teacher_size`):
+
+| Size | embed_dim | depth | num_heads | head_dim |
+| --- | --- | --- | --- | --- |
+| `S` | 396 | 12 | 6 | 66 |
+| `B` | 792 | 12 | 12 | 66 |
+| `M` (default) | 864 | 16 | 12 | 72 |
+| `L` | 1056 | 24 | 16 | 66 |
+
+The student is produced by holding `head_dim` constant and dividing `num_heads` / `depth` by
+`-r / --reduction_factor`. For example, `-ts M -r 2` yields a student with embed_dim=432,
+depth=8, num_heads=6 (head_dim still 72, so the 3D rotary positional embedding stays valid).
+
+Teacher folder is auto-derived from `-ts`:
+```
+{nnUNet_results}/{Dataset}/nnUNet_Primus_{S|B|M|L}_Trainer__nnUNetPlans__{configuration}/
+```
+
+```bash
+# 1) Train the upstream Primus teacher with stock nnUNetv2 first:
+nnUNetv2_train DATASET_ID 3d_fullres 0 -tr nnUNet_Primus_M_Trainer
+# (repeat for folds 1-4 if you want a multi-teacher ensemble)
+
+# 2) Distill into a Primus student (default teacher size M, reduction 2x):
+nnUNetv2_primus_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2
+
+# Pick a smaller / larger teacher:
+nnUNetv2_primus_distillation_train -d DATASET_ID -ts S -f 0 -a 0.3 -temp 3.0 -r 2
+nnUNetv2_primus_distillation_train -d DATASET_ID -ts L -f 0 -a 0.3 -temp 3.0 -r 2
+
+# Multi-teacher ensemble across folds:
+nnUNetv2_primus_distillation_train -d DATASET_ID -ts M -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2
+
+# Continue previous training, custom warmup duration, DA5 augmentation:
+nnUNetv2_primus_distillation_train -d DATASET_ID -ts M -f 0 -r 2 -w 50 -c_continue
+nnUNetv2_primus_distillation_train -d DATASET_ID -ts M -f 0 -r 2 --use_da5
+
+# Custom teacher folder (e.g. one of the BS8 / 96_BS1 variants):
+nnUNetv2_primus_distillation_train -d DATASET_ID -ts M -f 0 -r 2 -t /path/to/custom/primus/teacher
+```
+
+Primus-specific notes:
+- The student uses AdamW + linear warmup → polynomial schedule (matches upstream
+  `AbstractPrimus`); `-w / --warmup_epochs` controls the warmup duration (default 50).
+- Deep supervision is disabled — Primus emits a single full-resolution map.
+- Cascade configurations (`3d_cascade_fullres`) are accepted as long as the underlying
+  Primus teacher was trained on the same configuration with the lowres predictions in place.
+
 Parameter description:
 - `-d, --dataset_id`: Dataset ID
 - `-f, --fold`: Fold number used to train the student model
@@ -293,6 +346,32 @@ nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -da5 -fix
 
 # ResEnc export with simplified ONNX
 nnUNetv2_resenc_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -sim
+```
+
+#### Primus Distillation Model Export
+
+```bash
+# Basic export (default teacher size M, reduction 2x)
+nnUNetv2_primus_distillation_export_onnx -d DATASET_ID -f 0 -r 2
+
+# Pick a different teacher size used during training
+nnUNetv2_primus_distillation_export_onnx -d DATASET_ID -ts S -f 0 -r 2
+nnUNetv2_primus_distillation_export_onnx -d DATASET_ID -ts L -f 0 -r 2
+
+# Custom output path
+nnUNetv2_primus_distillation_export_onnx -d DATASET_ID -ts M -f 0 -r 2 -o /path/to/primus.onnx
+
+# Custom input shape (must satisfy patch_size divisibility constraints of the teacher)
+nnUNetv2_primus_distillation_export_onnx -d DATASET_ID -ts M -f 0 -r 2 -is 1 1 128 128 128
+
+# Fixed-shape export (disable dynamic axes)
+nnUNetv2_primus_distillation_export_onnx -d DATASET_ID -ts M -f 0 -r 2 -no_da
+
+# Export DA5-trained checkpoint
+nnUNetv2_primus_distillation_export_onnx -d DATASET_ID -ts M -f 0 -r 2 -da5
+
+# Simplify with onnx-simplifier
+nnUNetv2_primus_distillation_export_onnx -d DATASET_ID -ts M -f 0 -r 2 -sim
 ```
 
 Parameter description:
