@@ -52,9 +52,7 @@ from nnunetv2.training.lr_scheduler.warmup import (
 from nnunetv2.training.nnUNetTrainer.variants.data_augmentation.nnUNetTrainerDA5 import (
     nnUNetTrainerDA5,
 )
-from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import (
-    nnUNetDistillationTrainer,
-)
+from nnunet_distillation_trainer import nnUNetDistillationTrainer
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
 
 
