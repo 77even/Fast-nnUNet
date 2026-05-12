@@ -67,7 +67,7 @@ from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 from nnunetv2.utilities.helpers import empty_cache
 from nnunetv2.paths import nnUNet_preprocessed, nnUNet_results
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
-from nnunetv2.training.logging.nnunet_logger import nnUNetLogger
+from nnunetv2.training.logging.nnunet_logger import LocalLogger
 from datetime import datetime
 from time import sleep
 import sys
@@ -444,7 +444,7 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             self.log_file = join(self.output_folder, "training_log_%d_%d_%d_%02.0d_%02.0d_%02.0d.txt" %
                                  (timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute,
                                   timestamp.second))
-            self.logger = nnUNetLogger()
+            self.logger = LocalLogger()
 
             self.print_to_log_file("\n#######################################################################\n"
                                    "Please cite the following paper when using nnU-Net:\n"

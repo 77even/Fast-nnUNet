@@ -28,16 +28,10 @@ import torch
 import json
 from batchgenerators.utilities.file_and_folder_operations import join
 
-# Ensure using nnunetv2 from current directory
-nnunet_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, nnunet_dir)
-
-# Import paths from nnunetv2
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
-
-# Import nnUNetDistillationTrainer directly
-from nnunetv2.training.nnUNetTrainer.variants.nnUNetDistillationTrainer import nnUNetDistillationTrainer, nnUNetDistillationTrainerDA5
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
+
+from nnunet_distillation_trainer import nnUNetDistillationTrainer, nnUNetDistillationTrainerDA5
 
 def get_dataset_name_from_id(dataset_id):
     """Get the complete dataset name from dataset ID"""
