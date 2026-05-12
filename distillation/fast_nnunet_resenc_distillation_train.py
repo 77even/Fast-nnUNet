@@ -282,7 +282,7 @@ def main():
     # Create command line argument parser
     parser = argparse.ArgumentParser(description='nnUNetv2 ResEnc Knowledge Distillation Training')
     parser.add_argument('-d', '--dataset_id', type=str, required=True, help='Dataset ID (e.g., 793)')
-    parser.add_argument('-c', '--configuration', type=str, default='3d_fullres', help='nnUNet configuration (default: 3d_fullres)')
+    parser.add_argument('-c', '--configuration', type=str, default='3d_fullres', help='nnUNet configuration: 2d / 3d_lowres / 3d_fullres / 3d_cascade_fullres (default: 3d_fullres)')
     parser.add_argument('-f', '--fold', type=int, default=0, help='Fold number for training (default: 0)')
     parser.add_argument('-t', '--teacher_model_folder', type=str, help='ResEnc teacher model folder path (if not provided, will be auto-constructed)')
     parser.add_argument('-tf', '--teacher_folds', type=int, nargs='+', 
