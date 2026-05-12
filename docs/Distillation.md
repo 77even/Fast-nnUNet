@@ -105,7 +105,35 @@ nnUNetv2_train DATASET_ID 3d_fullres 4 -p nnUNetResEncUNetMPlans/nnUNetResEncUNe
 
 ### 2. Knowledge Distillation Training
 
-Use the trained teacher models for knowledge distillation:
+Use the trained teacher models for knowledge distillation.
+
+#### Supported nnUNet Configurations
+
+All four standard nnUNetv2 configurations are supported via `-c / --configuration`:
+
+| Configuration | Description | Notes |
+| --- | --- | --- |
+| `2d` | 2D slice-based U-Net | Uses Conv2d / InstanceNorm2d automatically |
+| `3d_lowres` | Low-resolution 3D U-Net | Independent stage, also used as cascade stage 1 |
+| `3d_fullres` | Full-resolution 3D U-Net (default) | Most common choice |
+| `3d_cascade_fullres` | High-res second stage of the cascade | Reads `predicted_next_stage/` from the corresponding `3d_lowres` model |
+
+The student network's spatial dimensionality (2D vs 3D) and the cascade input-channel count are detected automatically from the configuration's `patch_size` and the upstream plans — no extra flags are needed.
+
+**Cascade workflow:** train and predict the lowres stage with stock nnUNetv2 first so the cascade inputs exist, then run distillation on each stage:
+
+```bash
+# (1) Train and predict the upstream lowres teacher with stock nnUNetv2,
+#     which populates predicted_next_stage/3d_cascade_fullres/.
+nnUNetv2_train DATASET_ID 3d_lowres 0
+nnUNetv2_predict_from_modelfolder ...  # see nnUNetv2 docs for cascade prep
+
+# (2) Distill the lowres stage (optional; you can also keep the upstream lowres model).
+nnUNetv2_distillation_train -d DATASET_ID -c 3d_lowres -f 0 -a 0.3 -temp 3.0 -r 2
+
+# (3) Distill the cascade fullres stage — extra input channels are picked up automatically.
+nnUNetv2_distillation_train -d DATASET_ID -c 3d_cascade_fullres -f 0 -a 0.3 -temp 3.0 -r 2
+```
 
 #### Standard Knowledge Distillation
 
@@ -133,6 +161,11 @@ nnUNetv2_distillation_train -d DATASET_ID -f 0 -a 0.3 -temp 3.0 -r 2 --use_da5
 
 # Combine DA5 with other options
 nnUNetv2_distillation_train -d DATASET_ID -f 0 -tf 0 1 2 3 4 -a 0.3 -temp 3.0 -r 2 --use_da5 -c_continue
+
+# 2D / 3d_lowres / 3d_cascade_fullres examples (default is 3d_fullres)
+nnUNetv2_distillation_train -d DATASET_ID -c 2d                 -f 0 -a 0.3 -temp 3.0 -r 2
+nnUNetv2_distillation_train -d DATASET_ID -c 3d_lowres          -f 0 -a 0.3 -temp 3.0 -r 2
+nnUNetv2_distillation_train -d DATASET_ID -c 3d_cascade_fullres -f 0 -a 0.3 -temp 3.0 -r 2
 ```
 
 #### ResEnc Knowledge Distillation (Enhanced Performance)
@@ -220,6 +253,12 @@ nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -da5 -v
 
 # Export with simplified ONNX
 nnUNetv2_distillation_export_onnx -d DATASET_ID -f 0 -r 2 -sim
+
+# Export 2D / 3d_lowres / 3d_cascade_fullres models — 2D dumps an N×C×H×W ONNX,
+# 3d_cascade_fullres uses the lowres-augmented input channel count automatically.
+nnUNetv2_distillation_export_onnx -d DATASET_ID -c 2d                 -f 0 -r 2
+nnUNetv2_distillation_export_onnx -d DATASET_ID -c 3d_lowres          -f 0 -r 2
+nnUNetv2_distillation_export_onnx -d DATASET_ID -c 3d_cascade_fullres -f 0 -r 2
 ```
 
 #### ResEnc Distillation Model Export
