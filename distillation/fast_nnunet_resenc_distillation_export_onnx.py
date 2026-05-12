@@ -246,17 +246,35 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
     trainer.student_plans_identifier = student_plans_identifier
     
     # Get network architecture parameters
+    # determine_num_input_channels handles cascade (extra channels from previous stage)
     num_input_channels = determine_num_input_channels(trainer.plans_manager, trainer.configuration_manager, dataset_json)
     num_output_channels = trainer.label_manager.num_segmentation_heads
-    
+
+    # Pick conv/norm ops based on patch_size dim so 2d configurations work
+    dim = len(trainer.configuration_manager.patch_size)
+    if dim == 2:
+        conv_op_cls = torch.nn.Conv2d
+        norm_op_cls = torch.nn.InstanceNorm2d
+    elif dim == 3:
+        conv_op_cls = torch.nn.Conv3d
+        norm_op_cls = torch.nn.InstanceNorm3d
+    else:
+        raise ValueError(f"Unsupported patch_size dimensionality: {dim} (expected 2 or 3)")
+
     if verbose:
+        print(f"Spatial dim: {dim}D (configuration={configuration})")
         print(f"Number of input channels: {num_input_channels}")
         print(f"Number of output channels: {num_output_channels}")
-    
+
     # Get architecture configuration
     if configuration in plans['configurations']:
         config = plans['configurations'][configuration]
-        
+
+        # Per-dim defaults used only when plans omit kernel_sizes/strides
+        default_kernel = [3] * dim
+        default_stride_unit = [2] * dim
+        default_stride_first = [1] * dim
+
         # Extract network parameters
         if 'architecture' in config:
             arch_info = config['architecture']
@@ -264,15 +282,15 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
                 arch_kwargs = arch_info['arch_kwargs']
                 n_stages = arch_kwargs.get('n_stages', 6)
                 features_per_stage = arch_kwargs.get('features_per_stage', [32, 64, 128, 256, 320, 320][:n_stages])
-                strides = arch_kwargs.get('strides', [[1, 1, 1]] + [[2, 2, 2]] * (n_stages - 1))
-                kernel_sizes = arch_kwargs.get('kernel_sizes', [[3, 3, 3]] * n_stages)
+                strides = arch_kwargs.get('strides', [default_stride_first] + [default_stride_unit] * (n_stages - 1))
+                kernel_sizes = arch_kwargs.get('kernel_sizes', [default_kernel] * n_stages)
                 n_blocks_per_stage = arch_kwargs.get('n_blocks_per_stage', [1, 3, 4, 6, 6, 6][:n_stages])
             else:
                 # Fall back to defaults
                 n_stages = 6
                 features_per_stage = [32, 64, 128, 256, 320, 320][:n_stages]
-                strides = [[1, 1, 1]] + [[2, 2, 2]] * (n_stages - 1)
-                kernel_sizes = [[3, 3, 3]] * n_stages
+                strides = [default_stride_first] + [default_stride_unit] * (n_stages - 1)
+                kernel_sizes = [default_kernel] * n_stages
                 n_blocks_per_stage = [1, 3, 4, 6, 6, 6][:n_stages]
         else:
             # Get from other configuration keys
@@ -280,15 +298,15 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
                 n_stages = len(config['pool_op_kernel_sizes'])
                 features_per_stage = config.get('features_per_stage', [32, 64, 128, 256, 320, 320][:n_stages])
                 strides = config['pool_op_kernel_sizes']
-                kernel_sizes = config.get('conv_kernel_sizes', [[3, 3, 3]] * n_stages)
+                kernel_sizes = config.get('conv_kernel_sizes', [default_kernel] * n_stages)
                 n_blocks_per_stage = [1, 3, 4, 6, 6, 6][:n_stages]
             else:
                 # Use default values
                 print("Warning: Cannot find complete network architecture configuration in plans, using defaults")
                 n_stages = 6
                 features_per_stage = [32, 64, 128, 256, 320, 320][:n_stages]
-                strides = [[1, 1, 1]] + [[2, 2, 2]] * (n_stages - 1)
-                kernel_sizes = [[3, 3, 3]] * n_stages
+                strides = [default_stride_first] + [default_stride_unit] * (n_stages - 1)
+                kernel_sizes = [default_kernel] * n_stages
                 n_blocks_per_stage = [1, 3, 4, 6, 6, 6][:n_stages]
         
         # Apply feature reduction factor
@@ -346,13 +364,13 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
             num_classes=num_output_channels,
             n_stages=n_stages,
             features_per_stage=lite_features_per_stage,
-            conv_op=torch.nn.Conv3d,
+            conv_op=conv_op_cls,
             kernel_sizes=[tuple(k) if isinstance(k, list) else k for k in kernel_sizes],
             strides=[tuple(p) if isinstance(p, list) else p for p in strides],
             n_blocks_per_stage=lite_n_blocks_per_stage,
             n_conv_per_stage_decoder=[1] * (n_stages - 1),
             conv_bias=True,
-            norm_op=torch.nn.InstanceNorm3d,
+            norm_op=norm_op_cls,
             norm_op_kwargs={"eps": 1e-5, "affine": True},
             nonlin=torch.nn.LeakyReLU,
             nonlin_kwargs={"inplace": True},
@@ -365,13 +383,13 @@ def load_model_from_checkpoint(checkpoint_path, plans, dataset_json, configurati
             num_classes=num_output_channels,
             n_stages=n_stages,
             features_per_stage=lite_features_per_stage,
-            conv_op=torch.nn.Conv3d,
+            conv_op=conv_op_cls,
             kernel_sizes=[tuple(k) if isinstance(k, list) else k for k in kernel_sizes],
             strides=[tuple(p) if isinstance(p, list) else p for p in strides],
             n_conv_per_stage=[2] * n_stages,
             n_conv_per_stage_decoder=[2] * (n_stages - 1),
             conv_bias=True,
-            norm_op=torch.nn.InstanceNorm3d,
+            norm_op=norm_op_cls,
             norm_op_kwargs={"eps": 1e-5, "affine": True},
             nonlin=torch.nn.LeakyReLU,
             nonlin_kwargs={"inplace": True},
@@ -556,20 +574,22 @@ def export_resenc_distillation_to_onnx(dataset_id,
     
     maybe_mkdir_p(output_dir)
     
-    # Get input shape
+    # Get input shape — fall back to dim-appropriate default if patch_size missing
     if 'patch_size' in config:
         patch_size = config['patch_size']
+        dim = len(patch_size)
         input_shape = (1, num_input_channels, *patch_size)
     else:
-        # Default shape
+        # No patch_size found; default to 3D as historically (most uses cases)
+        dim = 3
         input_shape = (1, num_input_channels, 128, 128, 128)
-    
-    # Determine model type for filename
+
+    # Determine model type for filename (include configuration so 2d/3d_lowres/cascade don't overwrite)
     is_resenc_student = 'ResEnc' in student_plans_identifier
     model_type = "resenc" if is_resenc_student else "unet"
     if use_da5:
         model_type += "_da5"
-    
+
     # Create dummy input
     # IMPORTANT: Use randn (normal distribution) instead of zeros for better InstanceNorm behavior
     # InstanceNorm computes statistics from the input, so using realistic data distribution helps
@@ -578,7 +598,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
         # Fixed batch size
         dummy_input = torch.randn((batch_size, num_input_channels, *input_shape[2:]), dtype=torch.float32).to(device)
         dynamic_axes = None
-        onnx_filename = f"{model_type}_distillation_fold{fold}_batch{batch_size}_r{feature_reduction_factor}.onnx"
+        onnx_filename = f"{model_type}_distillation_{configuration}_fold{fold}_batch{batch_size}_r{feature_reduction_factor}.onnx"
     else:
         # Dynamic batch size
         dummy_input = torch.randn(input_shape, dtype=torch.float32).to(device)
@@ -586,7 +606,7 @@ def export_resenc_distillation_to_onnx(dataset_id,
             'input': {0: 'batch_size'},
             'output': {0: 'batch_size'}
         }
-        onnx_filename = f"{model_type}_distillation_fold{fold}_dynamic_r{feature_reduction_factor}.onnx"
+        onnx_filename = f"{model_type}_distillation_{configuration}_fold{fold}_dynamic_r{feature_reduction_factor}.onnx"
     
     output_path = join(output_dir, onnx_filename)
     
@@ -740,7 +760,7 @@ def main():
     parser = argparse.ArgumentParser(description='Export Fast nnUNet ResEnc distillation model to ONNX format')
     parser.add_argument('-d', '--dataset_id', type=str, required=True, help='Dataset ID')
     parser.add_argument('-o', '--output_dir', type=str, help='Output directory')
-    parser.add_argument('-c', '--configuration', type=str, default='3d_fullres', help='Configuration name')
+    parser.add_argument('-c', '--configuration', type=str, default='3d_fullres', help='nnUNet configuration: 2d / 3d_lowres / 3d_fullres / 3d_cascade_fullres (default: 3d_fullres)')
     parser.add_argument('-f', '--fold', type=int, default=0, help='Fold number')
     parser.add_argument('-b', '--batch_size', type=int, default=0, help='Batch size, 0 means dynamic')
     parser.add_argument('-cp', '--checkpoint', type=str, default='checkpoint_final.pth', help='Checkpoint filename')

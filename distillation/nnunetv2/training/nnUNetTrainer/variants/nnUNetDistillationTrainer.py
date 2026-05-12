@@ -24,7 +24,32 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Conv3d, InstanceNorm3d, LeakyReLU, ConvTranspose3d
+from torch.nn import (
+    Conv2d, Conv3d,
+    InstanceNorm2d, InstanceNorm3d,
+    LeakyReLU,
+    ConvTranspose2d, ConvTranspose3d,
+)
+
+
+def _dim_from_conv_op(conv_op):
+    """Return spatial dim (2 or 3) corresponding to a torch conv module class."""
+    if conv_op is Conv2d:
+        return 2
+    if conv_op is Conv3d:
+        return 3
+    raise ValueError(
+        f"Unsupported conv_op: {conv_op}; expected torch.nn.Conv2d or torch.nn.Conv3d"
+    )
+
+
+def _default_norm_op_for(conv_op):
+    """Pick the matching InstanceNorm class for the given conv_op."""
+    if conv_op is Conv2d:
+        return InstanceNorm2d
+    if conv_op is Conv3d:
+        return InstanceNorm3d
+    raise ValueError(f"Unsupported conv_op: {conv_op}")
 from torch import GradScaler
 from collections import OrderedDict
 import numpy as np
@@ -86,7 +111,7 @@ class LiteNNUNetStudent(nn.Module):
                  n_conv_per_stage: list = None,
                  n_conv_per_stage_decoder: list = None,
                  conv_bias: bool = True,
-                 norm_op: type = InstanceNorm3d,
+                 norm_op: type = None,
                  norm_op_kwargs: dict = None,
                  dropout_op: type = None,
                  dropout_op_kwargs: dict = None,
@@ -95,7 +120,12 @@ class LiteNNUNetStudent(nn.Module):
                  deep_supervision: bool = True
                  ):
         super().__init__()
-        
+
+        # Defaults that depend on the spatial dim (2D vs 3D) inferred from conv_op
+        dim = _dim_from_conv_op(conv_op)
+        if norm_op is None:
+            norm_op = _default_norm_op_for(conv_op)
+
         # Parameter settings
         if norm_op_kwargs is None:
             norm_op_kwargs = {'eps': 1e-5, 'affine': True}
@@ -104,13 +134,13 @@ class LiteNNUNetStudent(nn.Module):
         if features_per_stage is None:
             features_per_stage = [32, 64, 128, 256, 320, 320]
         if kernel_sizes is None:
-            kernel_sizes = [(3, 3, 3)] * n_stages
+            kernel_sizes = [(3,) * dim] * n_stages
         if n_conv_per_stage is None:
             n_conv_per_stage = [2] * n_stages
         if n_conv_per_stage_decoder is None:
             n_conv_per_stage_decoder = [2] * (n_stages - 1)
         if strides is None:
-            strides = [(1, 1, 1)] + [(2, 2, 2)] * (n_stages - 1)
+            strides = [(1,) * dim] + [(2,) * dim] * (n_stages - 1)
             
         # Check if parameter lengths match
         if not (len(features_per_stage) == n_stages and len(kernel_sizes) == n_stages and 
@@ -192,7 +222,7 @@ class LiteResEncStudent(nn.Module):
                  n_blocks_per_stage: list = None,
                  n_conv_per_stage_decoder: list = None,
                  conv_bias: bool = True,
-                 norm_op: type = InstanceNorm3d,
+                 norm_op: type = None,
                  norm_op_kwargs: dict = None,
                  dropout_op: type = None,
                  dropout_op_kwargs: dict = None,
@@ -201,7 +231,12 @@ class LiteResEncStudent(nn.Module):
                  deep_supervision: bool = True
                  ):
         super().__init__()
-        
+
+        # Defaults that depend on the spatial dim (2D vs 3D) inferred from conv_op
+        dim = _dim_from_conv_op(conv_op)
+        if norm_op is None:
+            norm_op = _default_norm_op_for(conv_op)
+
         # Parameter settings
         if norm_op_kwargs is None:
             norm_op_kwargs = {'eps': 1e-5, 'affine': True}
@@ -210,14 +245,14 @@ class LiteResEncStudent(nn.Module):
         if features_per_stage is None:
             features_per_stage = [32, 64, 128, 256, 320, 320]
         if isinstance(kernel_sizes, int):
-            kernel_sizes = [kernel_sizes] * n_stages
+            kernel_sizes = [(kernel_sizes,) * dim] * n_stages
         if n_blocks_per_stage is None:
             # Reduced from ResEnc's (1, 3, 4, 6, 6, 6) to lighter version
             n_blocks_per_stage = [1, 2, 2, 3, 3, 3][:n_stages]
         if n_conv_per_stage_decoder is None:
             n_conv_per_stage_decoder = [1] * (n_stages - 1)
         if strides is None:
-            strides = [(1, 1, 1)] + [(2, 2, 2)] * (n_stages - 1)
+            strides = [(1,) * dim] + [(2,) * dim] * (n_stages - 1)
             
         # Check if parameter lengths match
         if not (len(features_per_stage) == n_stages and len(kernel_sizes) == n_stages and 
@@ -619,12 +654,26 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
         else:
             self.print_to_log_file("Building lightweight standard UNet student model...")
         
-        # If input/output channel numbers are not provided, obtain them from plans
+        # If input/output channel numbers are not provided, obtain them from plans.
+        # determine_num_input_channels already accounts for cascade (previous stage adds
+        # num_classes extra input channels), so 3d_cascade_fullres works without changes.
         if num_input_channels is None:
             num_input_channels = determine_num_input_channels(self.plans_manager, self.configuration_manager, self.dataset_json)
         if num_output_channels is None:
             num_output_channels = self.label_manager.num_segmentation_heads
-        
+
+        # Pick conv/norm ops based on patch_size dimensionality so 2d configurations work
+        dim = len(self.configuration_manager.patch_size)
+        if dim == 2:
+            conv_op_cls = Conv2d
+            norm_op_cls = InstanceNorm2d
+        elif dim == 3:
+            conv_op_cls = Conv3d
+            norm_op_cls = InstanceNorm3d
+        else:
+            raise ValueError(f"Unsupported patch_size dimensionality: {dim} (expected 2 or 3)")
+        self.print_to_log_file(f"Spatial dimensionality: {dim}D (configuration={self.configuration_name})")
+
         # Check if there is a new format architecture field, if not, derive from configuration
         if 'architecture' in self.configuration_manager.configuration and 'arch_kwargs' in self.configuration_manager.configuration['architecture']:
             # New format plans
@@ -635,20 +684,19 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
             self.print_to_log_file("Detected old version plans format, manually build network parameters")
             
             # Get necessary parameters from configuration
-            dim = len(self.configuration_manager.patch_size)
             n_stages = len(self.configuration_manager.pool_op_kernel_sizes) + 1
-            
+
             # Base feature number and per stage feature number
             unet_max_num_features = self.plans_manager.plans.get('unet_max_num_features', 320)
             base_num_features = self.configuration_manager.configuration.get('UNet_base_num_features', 32)
-            
+
             # Calculate feature number for each stage
-            features_per_stage = [min(base_num_features * 2 ** i, unet_max_num_features) 
+            features_per_stage = [min(base_num_features * 2 ** i, unet_max_num_features)
                                  for i in range(n_stages)]
-            
-            # Get other network parameters
+
+            # Get other network parameters (kernel default shape follows dim)
             conv_kernel_sizes = self.configuration_manager.configuration.get(
-                'conv_kernel_sizes', [[3,3,3]] * n_stages)
+                'conv_kernel_sizes', [[3] * dim] * n_stages)
             
             # Build pool kernel size list, need to add a starting (1,1,1)
             pool_op_kernel_sizes = [(1,)*dim]
@@ -716,13 +764,13 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
                 num_classes=num_output_channels,
                 n_stages=plan_arch["n_stages"],
                 features_per_stage=lite_features_per_stage,
-                conv_op=Conv3d,
+                conv_op=conv_op_cls,
                 kernel_sizes=[tuple(ks) if not isinstance(ks[0], (list, tuple)) else tuple(ks[0]) for ks in plan_arch["kernel_sizes"]],
                 strides=[tuple(st) for st in plan_arch["strides"]],
                 n_blocks_per_stage=lite_n_blocks_per_stage,
                 n_conv_per_stage_decoder=plan_arch["n_conv_per_stage_decoder"],
                 conv_bias=plan_arch["conv_bias"],
-                norm_op=InstanceNorm3d,
+                norm_op=norm_op_cls,
                 norm_op_kwargs=plan_arch["norm_op_kwargs"],
                 nonlin=LeakyReLU,
                 nonlin_kwargs=plan_arch["nonlin_kwargs"],
@@ -735,13 +783,13 @@ class nnUNetDistillationTrainer(nnUNetTrainer):
                 num_classes=num_output_channels,
                 n_stages=plan_arch["n_stages"],
                 features_per_stage=lite_features_per_stage,
-                conv_op=Conv3d,
+                conv_op=conv_op_cls,
                 kernel_sizes=[tuple(ks) if not isinstance(ks[0], (list, tuple)) else tuple(ks[0]) for ks in plan_arch["kernel_sizes"]],
                 strides=[tuple(st) for st in plan_arch["strides"]],
                 n_conv_per_stage=plan_arch["n_conv_per_stage"],
                 n_conv_per_stage_decoder=plan_arch["n_conv_per_stage_decoder"],
                 conv_bias=plan_arch["conv_bias"],
-                norm_op=InstanceNorm3d,
+                norm_op=norm_op_cls,
                 norm_op_kwargs=plan_arch["norm_op_kwargs"],
                 nonlin=LeakyReLU,
                 nonlin_kwargs=plan_arch["nonlin_kwargs"],
